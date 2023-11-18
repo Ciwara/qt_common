@@ -7,3 +7,4 @@
 doc/
 *.pdf
 cmedia/img_media/product/
+.DS_Store
