@@ -251,6 +251,8 @@ class OrganizationTableWidget(FWidget):
         orga.bp = unicode(self.bp.text())
         orga.adress_org = unicode(self.adress_org.toPlainText())
         orga.save()
+
+        print(f"{self.parent=}")
         self.parent.parent.Notify(
             "Le Compte %s a été mise à jour" % orga.name_orga, "success"
         )

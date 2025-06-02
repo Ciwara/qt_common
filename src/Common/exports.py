@@ -17,16 +17,18 @@ DATETIME = f"{datetime.now().strftime('%m-%d-%Y_%Hh%Mm%Ss')}"
 
 
 def export_database_as_file():
-    destination = QFileDialog.getSaveFileName(
+    file_dialog = QFileDialog()
+    file_path, _ = file_dialog.getSaveFileName(
         QWidget(),
         "Sauvegarder la base de Donnée.",
         "Sauvegarde du {} {}.db".format(DATETIME, Organization.get(id=1).name_orga),
         "*.db",
     )
-    if not destination:
+    if not file_path:  # Check if the user canceled the dialog
         return None
+
     try:
-        shutil.copyfile(DB_FILE, destination)
+        shutil.copyfile(DB_FILE, file_path)
         Version().get(id=1).update_v()
         raise_success(
             "Les données ont été exportées correctement.",
@@ -80,21 +82,44 @@ def export_backup(folder=None, dst_folder=None):
 
 
 def import_backup(folder=None, dst_folder=None):
-    path_db_file = os.path.join(os.path.dirname(os.path.abspath("__file__")), DB_FILE)
-    shutil.copy(path_db_file, "Avant-{}-{}.db".format(DB_FILE, DATETIME))
-    name_select_f = QFileDialog.getOpenFileName(
-        QWidget(), "Open Data File", "", "CSV data files (*.db)"
-    )
-    shutil.copy(name_select_f, path_db_file)
+    try:
+        # Determine the current database file path
+        path_db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_FILE)
 
-    raise_success(
-        "Restoration des Donnée.",
-        """Les données ont été correctement restorée
-                    La version actualle de la base de donnée est {}
-                    """.format(
-            Version().get(id=1).display_name()
-        ),
-    )
+        # Create a backup of the current database
+        backup_file_name = "Avant-{}-{}.db".format(os.path.basename(DB_FILE), DATETIME)
+        backup_file_path = os.path.join(os.path.dirname(path_db_file), backup_file_name)
+        shutil.copy(path_db_file, backup_file_path)
+
+        # Open the file dialog to select the new database file
+        file_dialog = QFileDialog()
+        name_select_f, _ = file_dialog.getOpenFileName(
+            QWidget(), "Open Data File", "", "Database Files (*.db)"
+        )
+
+        # If the user selects a file
+        if name_select_f:
+            # Replace the current database with the selected file
+            shutil.copy(name_select_f, path_db_file)
+
+            raise_success(
+                "Restoration des Données.",
+                """Les données ont été correctement restaurées.
+                La version actuelle de la base de données est {}""".format(
+                    Version().get(id=1).display_name()
+                ),
+            )
+        else:
+            raise_error(
+                "Aucun fichier sélectionné.",
+                "Vous devez sélectionner un fichier pour restaurer la base de données.",
+            )
+
+    except IOError:
+        raise_error(
+            "La restauration a échoué.",
+            "Une erreur s'est produite lors de la copie des fichiers. Veuillez vérifier le fichier sélectionné et réessayer.",
+        )
 
 
 def upload_file(folder=None, dst_folder=None, type_f=None):

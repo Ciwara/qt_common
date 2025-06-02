@@ -13,32 +13,35 @@ from .ui.util import access_server, datetime_to_str, get_server_url, is_valide_m
 try:
     from .cstatic import CConstants
 except Exception as exc:
-    print(exc)
+    logger.error(f"Erreur lors de l'importation de CConstants: {exc}")
 
 
 class Network(QObject):
     def __init__(self):
         QObject.__init__(self)
-
-        logger.info("Connexion serveur ...")
+        logger.info("Initialisation de la connexion serveur")
 
     def submit(self, url, data):
-        logger.debug("submit", "data", " url ", url)
+        logger.debug(f"Envoi de données au serveur - URL: {url}, Données: {data}")
         resp_dict = {"response": {"message": "-"}}
         if access_server():
             client = requests.session()
             try:
+                logger.info(f"Tentative de connexion à {get_server_url(url)}")
                 response = client.get(get_server_url(url), data=json.dumps(data))
-                logger.info(response)
+                logger.info(f"Réponse du serveur - Status: {response.status_code}")
                 if response.status_code == 200:
-                    logger.debug(response.status_code)
+                    logger.debug(f"Réponse du serveur - Contenu: {response.content}")
                     try:
                         return json.loads(response.content.decode("UTF-8"))
                     except Exception as e:
+                        logger.error(f"Erreur lors du décodage de la réponse: {e}")
                         return {"response": e}
-            except:
+            except Exception as e:
+                logger.error(f"Erreur de connexion au serveur: {e}")
                 return resp_dict.update({"response": "Serveur non disponible"})
         else:
+            logger.warning("Pas de connexion internet")
             return resp_dict.update({"response": "Pas d'internet"})
 
     def update_version_checher(self):

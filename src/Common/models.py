@@ -16,6 +16,7 @@ import peewee
 from playhouse.migrate import DateTimeField  # CharField,
 from playhouse.migrate import BooleanField, SqliteMigrator
 
+from .cstatic import logger
 from .ui.util import copy_file, date_to_str, datetime_to_str
 
 DB_FILE = "database.db"
@@ -25,10 +26,9 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     # Change the db_file to the absolute path
     DB_FILE = os.path.join(sys._MEIPASS, DB_FILE)
 
-print(f"{DB_FILE=}")
+logger.info(f"Utilisation de la base de données: {DB_FILE}")
 
-
-print("Peewee version : " + peewee.__version__)
+logger.info(f"Version de Peewee: {peewee.__version__}")
 
 NOW = datetime.now()
 
@@ -45,11 +45,13 @@ class BaseModel(peewee.Model):
     last_update_date = DateTimeField(default=NOW)
 
     def updated(self):
+        logger.debug(f"Mise à jour de l'enregistrement {self.__class__.__name__} (id: {self.id})")
         self.is_syncro = True
         self.last_update_date = NOW
         self.save()
 
     def save_(self):
+        logger.debug(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {self.id})")
         self.is_syncro = False
         self.save()
 
@@ -61,7 +63,16 @@ class BaseModel(peewee.Model):
 
     @classmethod
     def all(cls):
+        logger.debug(f"Récupération de tous les enregistrements de {cls.__name__}")
         return list(cls.select())
+
+    def save(self, *args, **kwargs):
+        logger.debug(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {getattr(self, 'id', 'new')})")
+        return super().save(*args, **kwargs)
+
+    def delete_instance(self, *args, **kwargs):
+        logger.debug(f"Suppression de l'enregistrement {self.__class__.__name__} (id: {self.id})")
+        return super().delete_instance(*args, **kwargs)
 
 
 class FileJoin(BaseModel):

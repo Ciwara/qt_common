@@ -131,6 +131,7 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
             self.accept()
             if self.pp:
                 self.pp.refresh_()
+                print(f"user edit {self.parent=}")
                 self.parent.Notify(
                     "L'identifiant %s a été enregistré" % ow.username, "success"
                 )

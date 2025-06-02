@@ -149,6 +149,8 @@ class LicenseViewWidget(QDialog, FWidget):
             self.lcse.get_evaluation()
             self.cancel()
             self.accept()
+
+            print(f" Lincence view {self.parent=}")
             self.parent.Notify(
                 "La licence a été bien activée pour 60 jour. Merci.", "warring"
             )
