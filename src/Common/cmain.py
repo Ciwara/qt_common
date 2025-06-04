@@ -47,7 +47,7 @@ def initialize_main_window():
         from ui.mainwindow import MainWindow
         logger.info("Initialisation de la fenêtre principale externe")
         window = MainWindow()
-        window.setStyleSheet(theme)
+        apply_global_theme()
         setattr(FWindow, "window", window)
         logger.debug("Fenêtre principale externe initialisée")
         return window
@@ -60,10 +60,40 @@ def initialize_common_main_window():
     from .ui.commun_mainwindow import CommonMainWindow
     logger.info("Initialisation de la fenêtre principale du module Common")
     window = CommonMainWindow()
-    window.setStyleSheet(theme)
+    apply_global_theme()
     setattr(FWindow, "window", window)
     logger.debug("Fenêtre principale Common initialisée")
     return window
+
+def apply_global_theme():
+    """Applique le thème à toute l'application"""
+    try:
+        # Essayer d'utiliser le nouveau système de thèmes
+        from .ui.theme_utils import apply_theme_immediately
+        success = apply_theme_immediately()
+        if success:
+            logger.info("Thème appliqué globalement à toute l'application")
+        else:
+            logger.warning("Échec de l'application globale du thème, utilisation du fallback")
+            fallback_theme_application()
+    except ImportError:
+        # Fallback vers l'ancien système
+        logger.debug("theme_utils non disponible, utilisation du fallback")
+        fallback_theme_application()
+    except Exception as e:
+        logger.warning(f"Erreur lors de l'application du thème global: {e}")
+        fallback_theme_application()
+
+def fallback_theme_application():
+    """Application de fallback du thème en cas d'erreur"""
+    try:
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(theme)
+            logger.info("Thème appliqué via fallback à toute l'application")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'application du thème fallback: {e}")
 
 def handle_initial_conditions(window):
     logger.info("Vérification des conditions initiales")

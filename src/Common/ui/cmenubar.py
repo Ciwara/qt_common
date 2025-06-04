@@ -183,18 +183,146 @@ class FMenuBar(QMenuBar, FWidget):
             settings.theme = theme
             settings.save()
             logger.info(f"Thème changé vers: {theme}")
+            
+            # Appliquer le nouveau thème dynamiquement sans redémarrage
+            self.apply_theme_dynamically()
+            
         except Exception as e:
             logger.error(f"Erreur lors du changement de thème: {e}")
             try:
                 # Fallback: créer un nouvel enregistrement
                 Settings.create(id=1, theme=theme)
                 logger.info(f"Nouveau paramètre créé avec thème: {theme}")
+                self.apply_theme_dynamically()
             except Exception as e2:
                 logger.error(f"Impossible de créer les paramètres: {e2}")
                 return
-        self.restart()
+
+    def apply_theme_dynamically(self):
+        """Applique le nouveau thème sans redémarrer l'application"""
+        try:
+            # Utiliser la nouvelle fonction utilitaire pour appliquer le thème à toute l'application
+            from .theme_utils import apply_theme_immediately, get_theme_style
+            
+            # Appliquer le thème à TOUTE l'application (toutes fenêtres et dialogues)
+            success = apply_theme_immediately()
+            
+            if success:
+                logger.info("Thème appliqué dynamiquement avec succès à toute l'application")
+                
+                # Notifier l'utilisateur du changement
+                if hasattr(self.parent, 'Notify'):
+                    self.parent.Notify("Thème appliqué avec succès à toute l'application !", "success")
+                
+                # Message dans la barre de statut si disponible
+                if hasattr(self.parent, 'statusBar') and callable(self.parent.statusBar):
+                    status_bar = self.parent.statusBar()
+                    if status_bar:
+                        status_bar.showMessage("Thème appliqué à toutes les fenêtres", 3000)
+                
+            else:
+                logger.warning("Échec de l'application du thème")
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de l'application dynamique du thème: {e}")
+            # En cas d'erreur, proposer le redémarrage classique
+            from PyQt5.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self.parent,
+                "Changement de thème", 
+                "Le thème a été sauvegardé mais n'a pas pu être appliqué dynamiquement.\n\n"
+                "Voulez-vous redémarrer l'application pour voir les changements ?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.restart()
+    
+    def refresh_widgets_recursively(self, widget):
+        """Rafraîchit récursivement tous les widgets enfants"""
+        try:
+            # Rafraîchir le widget actuel
+            widget.update()
+            widget.repaint()
+            
+            # Rafraîchir tous les widgets enfants
+            for child in widget.findChildren(object):
+                if hasattr(child, 'update') and hasattr(child, 'repaint'):
+                    child.update()
+                    child.repaint()
+                    
+                    # Si le widget enfant a une méthode refresh, l'appeler
+                    if hasattr(child, 'refresh') and callable(getattr(child, 'refresh')):
+                        try:
+                            child.refresh()
+                        except:
+                            pass
+                    
+                    # Si le widget enfant a une méthode refresh_, l'appeler
+                    if hasattr(child, 'refresh_') and callable(getattr(child, 'refresh_')):
+                        try:
+                            child.refresh_()
+                        except:
+                            pass
+                            
+        except Exception as e:
+            logger.debug(f"Erreur lors du rafraîchissement récursif: {e}")
+    
+    def refresh_main_components(self):
+        """Rafraîchit les composants principaux de l'interface"""
+        try:
+            # Rafraîchir la barre d'outils si elle existe
+            if hasattr(self.parent, 'toolbar') and self.parent.toolbar:
+                self.parent.toolbar.update()
+                self.parent.toolbar.repaint()
+            
+            # Rafraîchir la barre de statut si elle existe
+            if hasattr(self.parent, 'statusBar') and callable(self.parent.statusBar):
+                status_bar = self.parent.statusBar()
+                if status_bar:
+                    status_bar.update()
+                    status_bar.repaint()
+            
+            # Rafraîchir le widget central si il existe
+            central_widget = self.parent.centralWidget()
+            if central_widget:
+                central_widget.update()
+                central_widget.repaint()
+                
+                # Si le widget central a une méthode de rafraîchissement
+                if hasattr(central_widget, 'refresh') and callable(getattr(central_widget, 'refresh')):
+                    try:
+                        central_widget.refresh()
+                    except:
+                        pass
+                        
+        except Exception as e:
+            logger.debug(f"Erreur lors du rafraîchissement des composants principaux: {e}")
+                
+    def update_menu_icons(self):
+        """Met à jour les icônes du menu selon le thème actuel"""
+        try:
+            # Cette méthode peut être étendue pour adapter les icônes au thème
+            # Par exemple, utiliser des icônes claires pour les thèmes sombres
+            
+            # Rafraîchir la barre de menu actuelle
+            self.update()
+            self.repaint()
+            
+            # Optionnel: adapter les icônes selon le thème (fonctionnalité future)
+            # from ..ui.style_qss import is_dark_theme
+            # if is_dark_theme():
+            #     # Utiliser des icônes adaptées aux thèmes sombres
+            #     pass
+            # else:
+            #     # Utiliser des icônes adaptées aux thèmes clairs
+            #     pass
+            
+        except Exception as e:
+            logger.debug(f"Erreur lors de la mise à jour des icônes: {e}")
 
     def restart(self):
+        """Méthode de redémarrage conservée pour les cas d'urgence"""
         import subprocess
         import sys
         import os

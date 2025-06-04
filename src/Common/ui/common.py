@@ -130,9 +130,28 @@ class FWidget(QWidget):
 class FDialog(QDialog, FWidget):
     def __init__(self, parent=0, *args, **kwargs):
         QDialog.__init__(self, parent=parent, *args, **kwargs)
+        
+        # S'assurer que le dialogue hérite automatiquement du thème de l'application
+        self.ensure_theme_inheritance()
 
     def page_names(self, app_name, txt):
         self.setWindowTitle("{} | {}".format(app_name, txt.upper()))
+    
+    def ensure_theme_inheritance(self):
+        """S'assure que ce dialogue hérite du thème de l'application"""
+        try:
+            from .theme_utils import ensure_dialog_theme_inheritance
+            ensure_dialog_theme_inheritance(self)
+        except ImportError:
+            # Si theme_utils n'est pas disponible, essayer d'hériter du style de l'application
+            try:
+                from PyQt5.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app and app.styleSheet():
+                    # Le dialogue hérite automatiquement, mais on force le rafraîchissement
+                    self.update()
+            except Exception:
+                pass  # Ignorer silencieusement les erreurs pour ne pas casser l'application
 
 
 # class FWebView(QWebView):
