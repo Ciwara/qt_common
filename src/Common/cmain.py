@@ -42,7 +42,7 @@ def setup_localization():
     logger.debug("Localisation configurée avec succès")
 
 def initialize_main_window():   
-    from .ui.mainwindow import MainWindow
+    from ui.mainwindow import MainWindow
     logger.info("Initialisation de la fenêtre principale")
     window = MainWindow()
     window.setStyleSheet(theme)
