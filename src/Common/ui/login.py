@@ -46,13 +46,20 @@ class LoginWidget(FDialog, FWidget):
         self.loginUserGroupBox()
         vbox.addWidget(self.title)
         vbox.addWidget(self.topLeftGroupBox)
-        # Set focus to username field
-        self.setFocusPro xy(self.password_field)
+        
+        # Définir le focus APRÈS la création des champs
+        if hasattr(self, 'password_field') and self.password_field:
+            self.setFocusProxy(self.password_field)
         self.setLayout(vbox)
 
     def loginUserGroupBox(self):
         self.topLeftGroupBox = QGroupBox(self.tr("Identification"))
         self.liste_username = Owner.select().where(Owner.isactive == True)
+
+        # Vérifier s'il y a des utilisateurs actifs
+        if not self.liste_username.exists():
+            print("Erreur: Aucun utilisateur actif trouvé")
+            return
 
         # Combobox widget
         self.box_username = QComboBox()
@@ -84,6 +91,7 @@ class LoginWidget(FDialog, FWidget):
         formbox.addRow(FormLabel("Mot de passe"), self.password_field)
         formbox.addRow(FormLabel(""), self.login_button)
         formbox.addRow(FormLabel(""), self.cancel_button)
+        formbox.addRow(FormLabel(""), self.login_error)  # Ajouter le champ d'erreur au formulaire
         if self.hibernate:
             self.cancel_button.setEnabled(False)
 
@@ -97,14 +105,29 @@ class LoginWidget(FDialog, FWidget):
 
     def login(self):
         """Handle login logic"""
+        # Réinitialiser le message d'erreur
+        self.login_error.setText("")
+        
         if not self.is_valide():
-            print("Login details are not valid.")
+            self.login_error.setText("Veuillez saisir votre mot de passe")
             return
 
-        username = str(self.liste_username[self.box_username.currentIndex()].username)
+        # Vérifier que la liste n'est pas vide et que l'index est valide
+        current_index = self.box_username.currentIndex()
+        if current_index < 0 or current_index >= len(self.liste_username):
+            self.login_error.setText("Erreur: Utilisateur sélectionné invalide")
+            return
+
+        # Convertir la requête en liste pour accéder par index de manière sécurisée
+        users_list = list(self.liste_username)
+        if current_index >= len(users_list):
+            self.login_error.setText("Erreur: Index utilisateur invalide")
+            return
+
+        username = str(users_list[current_index].username)
         password = Owner().crypt_password(self.password_field.text().strip())
 
-        # Check completeness
+        # Déconnecter tous les utilisateurs actuellement connectés
         for ow in Owner.select().where(Owner.islog == True):
             ow.islog = False
             ow.save()
@@ -113,9 +136,12 @@ class LoginWidget(FDialog, FWidget):
             owner = Owner.get(Owner.username == username, Owner.password == password)
             owner.islog = True
             owner.save()
-        except Exception as e:
-            print(f"Login error: {e}")
+            self.accept()
+        except Owner.DoesNotExist:
+            self.login_error.setText("Mot de passe incorrect")
             field_error(self.password_field, "Mot de passe incorrect")
             return False
-
-        self.accept()
+        except Exception as e:
+            print(f"Login error: {e}")
+            self.login_error.setText("Erreur de connexion")
+            return False
