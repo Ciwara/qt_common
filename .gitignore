@@ -10,3 +10,4 @@ cmedia/img_media/product/
 .DS_Store
 .env/
 logs/app.log
+database.db*

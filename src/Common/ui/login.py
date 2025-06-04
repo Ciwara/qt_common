@@ -39,7 +39,7 @@ class LoginWidget(FDialog, FWidget):
             f"""background: url({CConstants.APP_LOGO}) #DAF7A6;
                 border-radius: 14px 14px 8px 8px; border: 10px double #128a76;
                 width: 100%; height: auto; padding: 1em;
-                font: 8pt 'URW Bookman L';"""
+                font: 8pt 'Arial';"""
         )
         vbox = QHBoxLayout()
 

@@ -13,18 +13,18 @@ from .cmenutoolbar import FMenuToolBar
 from .common import FMainWindow, FWidget
 
 
-class DebtsViewWidget(FWidget):
+class TestViewWidget(FWidget):
     """Shows the home page"""
 
     def __init__(self, parent=0, *args, **kwargs):
-        super(DebtsViewWidget, self).__init__(parent=parent, *args, **kwargs)
+        super(TestViewWidget, self).__init__(parent=parent, *args, **kwargs)
         self.parent = parent
-        self.parentWidget().setWindowTitle(" Gestion des dettes")
+        self.parentWidget().setWindowTitle(" Test")
         self.title = "Movements"
-        logger.debug("Initialisation de DebtsViewWidget")
+        logger.debug("Initialisation de TestViewWidget")
 
 
-class MainWindow(FMainWindow):
+class CommonMainWindow(FMainWindow):
     def __init__(self):
         logger.info("Initialisation de la fenêtre principale")
         FMainWindow.__init__(self)
@@ -37,9 +37,9 @@ class MainWindow(FMainWindow):
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
         logger.debug("Barre d'outils initialisée")
 
-        self.page = DebtsViewWidget
+        self.page = TestViewWidget
         self.change_context(self.page)
-        logger.debug("Contexte initial changé vers DebtsViewWidget")
+        logger.debug("Contexte initial changé vers TestViewWidget")
 
     def page_width(self):
         return self.width() - 100

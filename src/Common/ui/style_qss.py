@@ -1,4 +1,5 @@
 from ..models import Settings
+from ..cstatic import logger
 
 blue_css = """/* Theme Blue*/
     palette {background: rgb(17, 133, 209, 255); disabled: rgb(200, 200, 200, 255);}
@@ -547,13 +548,12 @@ def get_style():
         Settings.DK: drak_ccs,
         Settings.FAD: bleu_mari_css,
     }
-    # dic_t = Settings.THEME
     try:
-        stt = Settings.get_or_create(id=1)
+        stt, created = Settings.get_or_create(id=1)
+        return dic_t.get(stt.theme, default)
     except Exception as exc:
-        return 1
-    # return dic_t.get(stt.theme)
-    return dic_t.get(Settings.get(id=1).theme)
+        logger.error(f"Erreur lors de la récupération du style: {exc}")
+        return default
 
 
 theme = get_style()

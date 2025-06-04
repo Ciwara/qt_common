@@ -26,7 +26,7 @@ class GStatusBar(QStatusBar):
         super(GStatusBar, self).__init__(parent)
 
         if not CConstants.SERV:
-            logger.info("Server not configured.")
+            # logger.info("Server not configured.")
             return
 
         logger.info("Server option active.")
@@ -189,6 +189,7 @@ class TaskThreadServer(QThread):
                         if not self.data.get("is_last"):
                             self.download_signal.emit()
                 else:
-                    logger.info("No server access")
+                    # logger.info("No server access")
+                    pass
 
                 self.contact_server_signal.emit()

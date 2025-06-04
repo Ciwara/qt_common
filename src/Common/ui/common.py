@@ -89,13 +89,10 @@ class FMainWindow(QMainWindow):
         d.exec_()
 
     def logout(self):
-        from ..models import Owner, Settings
-
-        # print("logout")
-        if Settings.get(id=1).is_login:
-            for ur in Owner.select().where(Owner.islog == True):
-                ur.islog = False
-                ur.save()
+        from ..models import Owner
+        for ur in Owner.select().where(Owner.islog == True):
+            ur.islog = False
+            ur.save()
 
     def Notify(self, mssg="Hi", type_mssg="warring"):
         from ..notification import Notification

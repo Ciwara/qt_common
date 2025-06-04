@@ -1,8 +1,6 @@
 from .cstatic import logger
-
+from database import Setup
 try:
-    from .database import AdminDatabase as Setup
-    from .cmain import cmain
     from .updater import UpdaterInit
 
     logger.info("Initialisation de l'application")

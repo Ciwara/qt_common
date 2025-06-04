@@ -9,12 +9,12 @@ import os
 import sys
 import time
 
-# from peewee_migrate import Router
+from peewee_migrate import Router
 from datetime import datetime, timedelta
 
 import peewee
-from playhouse.migrate import DateTimeField  # CharField,
-from playhouse.migrate import BooleanField, SqliteMigrator
+from playhouse.migrate import DateTimeField, BooleanField
+from peewee import SqliteDatabase
 
 from .cstatic import logger
 from .ui.util import copy_file, date_to_str, datetime_to_str
@@ -32,14 +32,22 @@ logger.info(f"Version de Peewee: {peewee.__version__}")
 
 NOW = datetime.now()
 
+# Variables globales pour la base de données et les migrations
+dbh = None
+router = None
 
-dbh = peewee.SqliteDatabase(DB_FILE)
-migrator = SqliteMigrator(dbh)
-
+def get_router():
+    """Retourne l'instance du router pour les migrations"""
+    global router
+    if router is None:
+        if dbh is None:
+            init_database()
+        router = Router(dbh, migrate_dir='migrations')
+    return router
 
 class BaseModel(peewee.Model):
     class Meta:
-        database = dbh
+        database = None  # Sera défini après l'initialisation de dbh
 
     is_syncro = BooleanField(default=False)
     last_update_date = DateTimeField(default=NOW)
@@ -401,10 +409,10 @@ class Settings(BaseModel):
     DEVISE = {USA: "$", XOF: "F", EURO: "€"}
 
     LEFT = "left"
-    RITGH = "right"
+    RIGHT = "right"
     TOP = "top"
     BOTTOM = "bottom"
-    POSITION = {LEFT: "Gauche", RITGH: "Droite", TOP: "Haut", BOTTOM: "Bas"}
+    POSITION = {LEFT: "Gauche", RIGHT: "Droite", TOP: "Haut", BOTTOM: "Bas"}
 
     slug = peewee.CharField(choices=LCONFIG, default=DEFAULT)
     is_login = peewee.BooleanField(default=True)
@@ -414,6 +422,29 @@ class Settings(BaseModel):
     url = peewee.CharField(default="http://file-repo.ml")
     theme = peewee.CharField(default=DF)
     devise = peewee.CharField(choices=DEVISE, default=XOF)
+
+    @classmethod
+    def init_settings(cls):
+        """Initialise les paramètres par défaut si nécessaire"""
+        settings = cls.filter(id=1).first()
+        if settings is None:
+            logger.debug("Création des paramètres par défaut")
+            settings = cls(
+                id=1,
+                slug=cls.DEFAULT,
+                is_login=True,
+                after_cam=1,
+                toolbar=True,
+                toolbar_position=cls.LEFT,
+                url="http://file-repo.ml",
+                theme=cls.DF,
+                devise=cls.XOF
+            )
+            settings.save()
+            logger.debug("Paramètres par défaut créés avec succès")
+        else:
+            logger.debug("Paramètres existants trouvés")
+        return settings
 
     def data(self):
         return {
@@ -440,3 +471,64 @@ class Settings(BaseModel):
         if not self.url:
             self.url = "http://file-repo.ml"
         super(Settings, self).save()
+
+def init_database():
+    """Initialise la base de données et crée les tables si nécessaire"""
+    global dbh, router
+    try:
+        logger.info("Initialisation de la base de données")
+        
+        # Liste des modèles à créer
+        models = [
+            BaseModel,
+            FileJoin,
+            Owner,
+            Organization,
+            License,
+            Version,
+            History,
+            Settings
+        ]
+        
+        if dbh is None:
+            logger.info("Création de la connexion à la base de données")
+            dbh = SqliteDatabase(
+                DB_FILE,
+                pragmas={
+                    'journal_mode': 'wal',  # Write-Ahead Logging
+                    'cache_size': -64 * 1000,  # 64MB cache
+                    'foreign_keys': 1,
+                    'ignore_check_constraints': 0,
+                    'synchronous': 0,  # Let the OS handle syncing
+                    'temp_store': 2,  # Store temp tables and indices in memory
+                }
+            )
+            
+            # Initialisation du router pour les migrations
+            router = Router(dbh, migrate_dir='migrations')
+            
+            # Définir la base de données pour tous les modèles
+            for model in models:
+                model._meta.database = dbh
+
+        # Vérification si la base de données est déjà connectée
+        if dbh.is_closed():
+            logger.info("Connexion à la base de données")
+            dbh.connect()
+        logger.info("Base de données connectée")
+        
+        # Création des tables
+        dbh.create_tables(models, safe=True)
+        logger.info("Tables créées avec succès")
+        
+        # Initialisation des paramètres par défaut
+        Settings.init_settings()
+        logger.info("Paramètres par défaut initialisés")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Erreur lors de l'initialisation de la base de données: {e}")
+        return False
+
+# Initialisation de la base de données au chargement du module
+init_database()

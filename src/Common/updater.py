@@ -82,7 +82,8 @@ class TaskThreadUpdater(QThread):
 
                     check_interval_without_server = check_interval_with_server
             else:
-                logger.info("No server access")
+                # logger.info("No server access")
+                pass
 
     def get_organization_slug(self):
         return self.parent.get_organization_slug()

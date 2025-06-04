@@ -17,7 +17,7 @@ from .models import (
     Owner,
     Settings,
     Version,
-    migrator,
+    get_router,
 )
 
 
@@ -83,7 +83,7 @@ class AdminDatabase(object):
         if count_list != number:
             for x, y, z in self.LIST_MIGRATE:
                 try:
-                    migrate(migrator.add_column(x, y, z))
+                    migrate(get_router().add_column(x, y, z))
                     print(x, " : ", y)
                 except Exception as e:
                     print(e)

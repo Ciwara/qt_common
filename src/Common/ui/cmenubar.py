@@ -3,6 +3,7 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
+from datetime import datetime
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QAction, QMenuBar, QMessageBox
 
@@ -11,11 +12,8 @@ from ..models import Owner, Settings
 from .clean_db import DBCleanerWidget
 from .common import FWidget
 from .license_view import LicenseViewWidget
+from ..cstatic import CConstants, logger
 
-try:
-    from ..cstatic import CConstants
-except Exception as e:
-    print(e)
 
 
 class FMenuBar(QMenuBar, FWidget):
@@ -80,9 +78,14 @@ class FMenuBar(QMenuBar, FWidget):
                 )
                 for k in styles.keys()
             ]
+            
+            # Récupération du thème actuel avec gestion d'erreur
+            settings = Settings.init_settings()
+            current_theme = settings.theme
+            
             for m in list_theme:
                 icon = ""
-                if m.get("theme") == Settings.get(id=1).theme:
+                if m.get("theme") == current_theme:
                     icon = "accept"
                 el_menu = QAction(
                     QIcon("{}{}.png".format(CConstants.img_cmedia, icon)),
@@ -138,7 +141,7 @@ class FMenuBar(QMenuBar, FWidget):
         exit_ = QAction(QIcon.fromTheme("application-exit", QIcon("")), "Exit", self)
         exit_.setShortcut("Ctrl+Q")
         exit_.setToolTip("Quiter l'application")
-        # exit_.triggered.connect(self.parent.close())
+        exit_.triggered.connect(self.parent.close)
         self.file_.addAction(exit_)
 
     def logout(self):
@@ -154,15 +157,12 @@ class FMenuBar(QMenuBar, FWidget):
         export_backup(folder=CConstants.des_image_record, dst_folder=CConstants.ARMOIRE)
 
     def goto_import_backup(self):
-        # QMessageBox.about(self, u"Fonctionalité",
-        # u"<h3>Cette fonction n'est pas fini... </h3>")
         import_backup(folder=CConstants.des_image_record, dst_folder=CConstants.ARMOIRE)
 
     def goto_clean_db(self):
         self.open_dialog(DBCleanerWidget, modal=True)
 
     # Admin
-
     def goto_admin(self):
         from .admin import AdminViewWidget
 
@@ -173,9 +173,13 @@ class FMenuBar(QMenuBar, FWidget):
         self.open_dialog(LicenseViewWidget, modal=True)
 
     def change_theme(self, theme):
-        sttg = Settings.get(id=1)
-        sttg.theme = theme
-        sttg.save()
+        try:
+            sttg = Settings.get(id=1)
+            sttg.theme = theme
+            sttg.save()
+        except Settings.DoesNotExist:
+            logger.warning("Création des paramètres par défaut")
+            Settings.create(id=1, theme=theme)
         self.restart()
 
     def restart(self):
@@ -190,6 +194,7 @@ class FMenuBar(QMenuBar, FWidget):
         try:
             subprocess.Popen([sys.executable, path_main_name])
         except Exception as e:
+            logger.error(f"Erreur lors du redémarrage: {e}")
             subprocess.call("python.exe " + path_main_name, shell=True)
 
     def goto(self, goto):
@@ -197,6 +202,7 @@ class FMenuBar(QMenuBar, FWidget):
 
     # Aide
     def goto_help(self):
+        from .html_view import HTMLView
         self.open_dialog(HTMLView, modal=True)
 
     def open_logo_file(self):
@@ -205,7 +211,7 @@ class FMenuBar(QMenuBar, FWidget):
         try:
             uopen_file(CConstants.NAME_MAIN.replace(".py", ".log"))
         except Exception as e:
-            print("show log file ", e)
+            logger.error(f"Erreur lors de l'ouverture du fichier log: {e}")
 
     # About
     def goto_about(self):
