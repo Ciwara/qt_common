@@ -418,7 +418,7 @@ class MenuBtt(Button):
                     color: #FFF;
             }
             """
-        self.setStyleSheet(css)
+        # self.setStyleSheet(css)
 
 
 class BttRond(Button):
@@ -435,7 +435,7 @@ class BttRond(Button):
                 padding:6px 12px;
 
         """
-        self.setStyleSheet(css)
+        # self.setStyleSheet(css)
 
 
 class DeletedBtt(Button):
@@ -453,7 +453,7 @@ class DeletedBtt(Button):
                 padding:6px 24px;
                 text-decoration:none;
                 """
-        self.setStyleSheet(css)
+        # self.setStyleSheet(css)
 
 
 class WarningBtt(Button):
@@ -480,7 +480,7 @@ class WarningBtt(Button):
                     padding:6px 24px;
 
                 """
-        self.setStyleSheet(css)
+        # self.setStyleSheet(css)
 
 
 class ButtonSave(Button):
@@ -508,8 +508,8 @@ class ButtonSave(Button):
         padding:6px 24px;
         """
         # self.setStyleSheet(css)
-        self.setIconSize(QSize(20, 20))
-        self.setFocusPolicy(Qt.TabFocus)
+        # self.setIconSize(QSize(20, 20))
+        # self.setFocusPolicy(Qt.TabFocus)
         font = QFont()
         font.setBold(True)
 
@@ -529,7 +529,7 @@ class Button_menu(Button):
         font.setWeight(40)
         # font.setStrikeOut(False)
         # font.setKerning(True)
-        self.setFont(font)
+        # self.setFont(font)
 
 
 class BttSmall(Button):

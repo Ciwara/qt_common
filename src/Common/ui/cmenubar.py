@@ -80,8 +80,12 @@ class FMenuBar(QMenuBar, FWidget):
             ]
             
             # Récupération du thème actuel avec gestion d'erreur
-            settings = Settings.init_settings()
-            current_theme = settings.theme
+            try:
+                settings = Settings.init_settings()
+                current_theme = settings.theme
+            except Exception as e:
+                logger.warning(f"Erreur lors de la récupération des paramètres: {e}")
+                current_theme = Settings.DF  # Thème par défaut
             
             for m in list_theme:
                 icon = ""
@@ -174,12 +178,20 @@ class FMenuBar(QMenuBar, FWidget):
 
     def change_theme(self, theme):
         try:
-            sttg = Settings.get(id=1)
-            sttg.theme = theme
-            sttg.save()
-        except Settings.DoesNotExist:
-            logger.warning("Création des paramètres par défaut")
-            Settings.create(id=1, theme=theme)
+            # Utiliser init_settings qui crée l'enregistrement s'il n'existe pas
+            settings = Settings.init_settings()
+            settings.theme = theme
+            settings.save()
+            logger.info(f"Thème changé vers: {theme}")
+        except Exception as e:
+            logger.error(f"Erreur lors du changement de thème: {e}")
+            try:
+                # Fallback: créer un nouvel enregistrement
+                Settings.create(id=1, theme=theme)
+                logger.info(f"Nouveau paramètre créé avec thème: {theme}")
+            except Exception as e2:
+                logger.error(f"Impossible de créer les paramètres: {e2}")
+                return
         self.restart()
 
     def restart(self):
@@ -188,14 +200,66 @@ class FMenuBar(QMenuBar, FWidget):
         import os
 
         self.parent.close()
-        path_main_name = os.path.join(
-            os.path.dirname(os.path.abspath("__file__")), CConstants.NAME_MAIN
-        )
+        
+        # Détection intelligente du fichier principal
+        current_script = sys.argv[0]  # Fichier actuel en cours d'exécution
+        
+        # Si on a un script spécifique (comme exemples_common_widgets.py), on l'utilise
+        if current_script and os.path.exists(current_script):
+            main_file = current_script
+            logger.info(f"Redémarrage avec le script actuel: {main_file}")
+        else:
+            # Fallback vers main.py ou lancer_projet.py
+            possible_mains = [
+                CConstants.NAME_MAIN,  # main.py
+                "lancer_projet.py",    # Notre lanceur custom
+                "exemples_common_widgets.py"  # Les exemples
+            ]
+            
+            main_file = None
+            for possible_main in possible_mains:
+                full_path = os.path.join(os.getcwd(), possible_main)
+                if os.path.exists(full_path):
+                    main_file = full_path
+                    logger.info(f"Fichier principal trouvé: {main_file}")
+                    break
+            
+            if not main_file:
+                logger.warning("Aucun fichier principal trouvé pour le redémarrage")
+                # Afficher un message à l'utilisateur
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self.parent,
+                    "Redémarrage",
+                    "Le thème a été changé. Veuillez redémarrer l'application manuellement pour voir les changements."
+                )
+                return
+        
         try:
-            subprocess.Popen([sys.executable, path_main_name])
+            # Tentative de redémarrage avec Python
+            logger.info(f"Tentative de redémarrage: {sys.executable} {main_file}")
+            subprocess.Popen([sys.executable, main_file])
         except Exception as e:
             logger.error(f"Erreur lors du redémarrage: {e}")
-            subprocess.call("python.exe " + path_main_name, shell=True)
+            try:
+                # Fallback avec shell
+                if os.name == 'nt':  # Windows
+                    subprocess.call(f"python.exe {main_file}", shell=True)
+                else:  # Unix/Linux/MacOS
+                    subprocess.call(f"python {main_file}", shell=True)
+            except Exception as e2:
+                logger.error(f"Erreur lors du redémarrage en fallback: {e2}")
+                # Message d'information à l'utilisateur
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self.parent,
+                    "Redémarrage requis",
+                    f"""Le thème a été changé avec succès.
+                    
+Veuillez redémarrer l'application manuellement pour voir les changements.
+
+Fichier à relancer: {main_file}"""
+                )
 
     def goto(self, goto):
         self.change_main_context(goto)

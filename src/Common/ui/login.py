@@ -47,7 +47,7 @@ class LoginWidget(FDialog, FWidget):
         vbox.addWidget(self.title)
         vbox.addWidget(self.topLeftGroupBox)
         # Set focus to username field
-        self.setFocusProxy(self.password_field)
+        self.setFocusPro xy(self.password_field)
         self.setLayout(vbox)
 
     def loginUserGroupBox(self):

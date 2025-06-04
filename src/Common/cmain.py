@@ -42,21 +42,27 @@ def setup_localization():
     logger.debug("Localisation configurée avec succès")
 
 def initialize_main_window():   
-    from ui.mainwindow import MainWindow
-    logger.info("Initialisation de la fenêtre principale")
-    window = MainWindow()
-    window.setStyleSheet(theme)
-    setattr(FWindow, "window", window)
-    logger.debug("Fenêtre principale initialisée")
-    return window
+    """Tentative d'initialisation de la fenêtre principale (externe)"""
+    try:
+        from ui.mainwindow import MainWindow
+        logger.info("Initialisation de la fenêtre principale externe")
+        window = MainWindow()
+        window.setStyleSheet(theme)
+        setattr(FWindow, "window", window)
+        logger.debug("Fenêtre principale externe initialisée")
+        return window
+    except ImportError as e:
+        logger.warning(f"Module ui.mainwindow non trouvé: {e}")
+        raise e
 
 def initialize_common_main_window():
+    """Initialisation de la fenêtre principale du module Common"""
     from .ui.commun_mainwindow import CommonMainWindow
-    logger.info("Initialisation de la fenêtre principale")
+    logger.info("Initialisation de la fenêtre principale du module Common")
     window = CommonMainWindow()
     window.setStyleSheet(theme)
     setattr(FWindow, "window", window)
-    logger.debug("Fenêtre principale initialisée")
+    logger.debug("Fenêtre principale Common initialisée")
     return window
 
 def handle_initial_conditions(window):
@@ -125,11 +131,25 @@ def cmain(test=False):
             dbh.connect()
         
         setup_localization()
+        
+        # Tentative d'initialisation de la fenêtre principale
+        window = None
         try:
+            # Essayer d'abord la fenêtre principale externe
             window = initialize_main_window()
+            logger.info("Fenêtre principale externe utilisée")
         except Exception as e:
-            # window = initialize_common_main_window()
-            logger.error(f"Erreur lors de l'initialisation de la fenêtre principale: {e}")
+            logger.warning(f"Impossible d'utiliser la fenêtre principale externe: {e}")
+            try:
+                # Utiliser la fenêtre commune du module Common
+                window = initialize_common_main_window()
+                logger.info("Fenêtre principale Common utilisée")
+            except Exception as e2:
+                logger.error(f"Impossible d'initialiser aucune fenêtre: {e2}")
+                return False
+
+        if window is None:
+            logger.error("Aucune fenêtre n'a pu être initialisée")
             return False
 
         if CConstants.DEBUG or test:

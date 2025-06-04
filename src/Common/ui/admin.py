@@ -37,7 +37,7 @@ from .user_add_or_edit import NewOrEditUserViewWidget
 from .util import check_is_empty
 
 try:
-    from ..cstatic import CConstants
+    from ..cstatic import CConstants, logger
 except Exception as e:
     print(e)
 try:
@@ -45,6 +45,10 @@ try:
 except NameError:
     unicode = str
 
+# Fonction d'internationalisation simple
+def _(text):
+    """Fonction d'internationalisation simple - peut être remplacée par gettext"""
+    return text
 
 class AdminViewWidget(FWidget):
     def __init__(self, parent=0, *args, **kwargs):
@@ -54,40 +58,38 @@ class AdminViewWidget(FWidget):
 
         self.parentWidget().setWindowTitle(CConstants.APP_NAME + "    ADMINISTRATION")
 
-        editbox = QGridLayout()
+        # Création de layouts séparés pour éviter les conflits
         table_config = QVBoxLayout()
         self.table_config = OrganizationTableWidget(parent=self)
-        table_config.addLayout(editbox)
         table_config.addWidget(self.table_config)
 
-        self.bttrestor = Button(_("Restaurer"))
+        self.bttrestor = Button("Restaurer")
         self.bttrestor.clicked.connect(self.restorseleted)
         self.bttrestor.setEnabled(False)
-        self.bttempty = Button(_("Vide"))
+        self.bttempty = Button("Vide")
         self.bttempty.clicked.connect(self.deletedseleted)
         self.bttempty.setEnabled(False)
-        gridbox = QGridLayout()
+        
+        # Layout séparé pour l'historique
         history_table = QVBoxLayout()
-
-        table_settings = QVBoxLayout()
-        self.table_settings = SettingsTableWidget(parent=self)
-        table_settings.addLayout(editbox)
-        table_settings.addWidget(self.table_settings)
-
         self.history_table = TrashTableWidget(parent=self)
-        history_table.addLayout(gridbox)
         history_table.addWidget(self.history_table)
 
+        # Layout séparé pour les paramètres
+        table_settings = QVBoxLayout()
+        self.table_settings = SettingsTableWidget(parent=self)
+        table_settings.addWidget(self.table_settings)
+
+        # Layout séparé pour la gestion des utilisateurs
         table_login = QVBoxLayout()
         self.table_login = LoginManageWidget(parent=self)
-        table_login.addLayout(gridbox)
         table_login.addWidget(self.table_login)
 
         tab_widget = tabbox(
-            (table_settings, _("Paramètre")),
-            (table_config, _("Gestion de l'organisation")),
-            (history_table, _("Historique")),
-            (table_login, _("Gestion d'utilisateurs")),
+            (table_settings, "Paramètre"),
+            (table_config, "Gestion de l'organisation"),
+            (history_table, "Historique"),
+            (table_login, "Gestion d'utilisateurs"),
         )
 
         vbox = QVBoxLayout()
@@ -180,8 +182,32 @@ class OrganizationTableWidget(FWidget):
     def __init__(self, parent, *args, **kwargs):
         super(FWidget, self).__init__(parent=parent, *args, **kwargs)
 
-        self.organization = Organization().get(id=1)
-        # print(self.organization)
+        # Récupération sécurisée de l'organisation
+        try:
+            self.organization = Organization.get(id=1)
+        except Organization.DoesNotExist:
+            logger.warning("Organisation avec id=1 non trouvée, création d'une nouvelle")
+            self.organization = Organization.create(
+                id=1,
+                name_orga="Mon Organisation",
+                phone=0,
+                bp="",
+                email_org="",
+                adress_org="",
+                logo_orga=""
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération de l'organisation: {e}")
+            # Valeurs par défaut
+            self.organization = type('MockOrganization', (), {
+                'logo_orga': '',
+                'name_orga': 'Mon Organisation',
+                'phone': 0,
+                'bp': '',
+                'email_org': '',
+                'adress_org': ''
+            })()
+        
         self.parent = parent
         vbox = QVBoxLayout()
         # vbox.addWidget(FPageTitle(u"Utilisateur: %s " %
@@ -204,14 +230,14 @@ class OrganizationTableWidget(FWidget):
         )
         self.bn_upload.clicked.connect(self.upload_logo)
 
-        self.logo_orga = LineEdit(self.organization.logo_orga)
-        self.name_orga = LineEdit(self.organization.name_orga)
-        self.phone = IntLineEdit(str(self.organization.phone))
+        self.logo_orga = LineEdit(str(self.organization.logo_orga or ""))
+        self.name_orga = LineEdit(str(self.organization.name_orga or ""))
+        self.phone = IntLineEdit(str(self.organization.phone or "0"))
         self.phone.setMaximumWidth(250)
-        self.bp = LineEdit(self.organization.bp)
+        self.bp = LineEdit(str(self.organization.bp or ""))
         self.bp.setMaximumWidth(250)
-        self.adress_org = QTextEdit(self.organization.adress_org)
-        self.email_org = LineEdit(self.organization.email_org)
+        self.adress_org = QTextEdit(str(self.organization.adress_org or ""))
+        self.email_org = LineEdit(str(self.organization.email_org or ""))
         self.email_org.setMaximumWidth(250)
 
         formbox = QFormLayout()
@@ -244,7 +270,11 @@ class OrganizationTableWidget(FWidget):
         if check_is_empty(self.phone):
             return
 
-        orga = Organization().get(id=1)
+        try:
+            orga = Organization.get(id=1)
+        except Organization.DoesNotExist:
+            orga = Organization.create(id=1)
+        
         orga.name_orga = name_orga
         orga.phone = unicode(self.phone.text())
         orga.email_org = unicode(self.email_org.text())
@@ -253,9 +283,12 @@ class OrganizationTableWidget(FWidget):
         orga.save()
 
         print(f"{self.parent=}")
-        self.parent.parent.Notify(
-            "Le Compte %s a été mise à jour" % orga.name_orga, "success"
-        )
+        if hasattr(self.parent, 'parent') and hasattr(self.parent.parent, 'Notify'):
+            self.parent.parent.Notify(
+                "Le Compte %s a été mise à jour" % orga.name_orga, "success"
+            )
+        else:
+            logger.info(f"Organisation {orga.name_orga} mise à jour avec succès")
 
 
 class LoginManageWidget(FWidget):
@@ -435,30 +468,47 @@ class SettingsTableWidget(FWidget):
     def __init__(self, parent, *args, **kwargs):
         super(FWidget, self).__init__(parent=parent, *args, **kwargs)
 
-        self.settings = Settings().get(id=1)
+        # Utilisation sécurisée de Settings.init_settings()
+        try:
+            self.settings = Settings.init_settings()
+            logger.debug("Paramètres chargés avec succès pour l'administration")
+        except Exception as e:
+            logger.error(f"Erreur lors du chargement des paramètres: {e}")
+            # Créer un objet mock avec des valeurs par défaut
+            self.settings = type('MockSettings', (), {
+                'url': 'http://file-repo.ml',
+                'theme': Settings.DF,
+                'is_login': True,
+                'after_cam': 1,
+                'devise': Settings.XOF,
+                'toolbar_position': Settings.LEFT,
+                'toolbar': True
+            })()
+        
         self.parent = parent
         vbox = QVBoxLayout()
         # self.slug_field =
-        self.url_field = LineEdit(self.settings.url)
+        self.url_field = LineEdit(str(self.settings.url or "http://file-repo.ml"))
         self.list_theme = Settings.THEME
         # Combobox widget
         self.box_theme = QComboBox()
         for index, value in enumerate(self.list_theme):
             self.box_theme.addItem("{}".format(self.list_theme[value]), value)
-            if self.settings.theme == value:
+            if hasattr(self.settings, 'theme') and self.settings.theme == value:
                 self.box_theme.setCurrentIndex(index)
 
         self.box_vilgule = QDoubleSpinBox()
 
         self.box_vilgule.setMaximum(4)
-        self.after_cam = self.box_vilgule.setValue(float(self.settings.after_cam))
+        after_cam_value = getattr(self.settings, 'after_cam', 1)
+        self.after_cam = self.box_vilgule.setValue(float(after_cam_value))
 
         self.liste_devise = Settings.DEVISE
         # Combobox widget
         self.box_devise = QComboBox()
         for index, value in enumerate(self.liste_devise):
             self.box_devise.addItem("{}".format(self.liste_devise[value]), value)
-            if self.settings.devise == value:
+            if hasattr(self.settings, 'devise') and self.settings.devise == value:
                 self.box_devise.setCurrentIndex(index)
 
         self.liste_position = Settings.POSITION
@@ -466,19 +516,20 @@ class SettingsTableWidget(FWidget):
         self.box_position = QComboBox()
         for index, value in enumerate(self.liste_position):
             self.box_position.addItem("{}".format(self.liste_position[value]), value)
-            if self.settings.toolbar_position == value:
+            if hasattr(self.settings, 'toolbar_position') and self.settings.toolbar_position == value:
                 self.box_position.setCurrentIndex(index)
 
         self.checked = QCheckBox("Active")
-        if self.settings.is_login:
+        if hasattr(self.settings, 'is_login') and self.settings.is_login:
             self.checked.setCheckState(Qt.Checked)
         self.checked.setToolTip(
             """Cocher si vous voulez pour deactive
                                 le login continue à utiliser le systeme"""
         )
         self.toolbar_checked = QCheckBox("Active")
-        print("toolbar ", self.settings.toolbar)
-        if self.settings.toolbar:
+        toolbar_value = getattr(self.settings, 'toolbar', True)
+        print("toolbar ", toolbar_value)
+        if toolbar_value:
             self.toolbar_checked.setCheckState(Qt.Checked)
         self.toolbar_checked.setToolTip(
             """Cocher si vous voulez pour deactive
@@ -508,20 +559,28 @@ class SettingsTableWidget(FWidget):
         # if check_is_empty(self.url_field):
         #     return
 
-        self.settings.url = str(self.url_field.text())
-        self.settings.is_login = (
-            True if self.checked.checkState() == Qt.Checked else False
-        )
-        self.settings.toolbar = (
-            True if self.toolbar_checked.checkState() == Qt.Checked else False
-        )
-        print("self.settings.toolbar", self.settings.toolbar)
-        self.settings.after_cam = int(self.box_vilgule.value())
-        self.settings.theme = self.box_theme.itemData(self.box_theme.currentIndex())
-        self.settings.devise = self.box_devise.itemData(self.box_devise.currentIndex())
-        self.settings.toolbar_position = self.box_position.itemData(
-            self.box_position.currentIndex()
-        )
-        self.settings.save()
+        try:
+            # Utiliser init_settings pour récupérer/créer les paramètres
+            settings = Settings.init_settings()
+            
+            settings.url = str(self.url_field.text())
+            settings.is_login = (
+                True if self.checked.checkState() == Qt.Checked else False
+            )
+            settings.toolbar = (
+                True if self.toolbar_checked.checkState() == Qt.Checked else False
+            )
+            print("settings.toolbar", settings.toolbar)
+            settings.after_cam = int(self.box_vilgule.value())
+            settings.theme = self.box_theme.itemData(self.box_theme.currentIndex())
+            settings.devise = self.box_devise.itemData(self.box_devise.currentIndex())
+            settings.toolbar_position = self.box_position.itemData(
+                self.box_position.currentIndex()
+            )
+            settings.save()
 
-        self.parent.parent.Notify("Paramètre mise à jour avec success", "success")
+            logger.info("Paramètres mis à jour avec succès")
+            if hasattr(self.parent, 'parent') and hasattr(self.parent.parent, 'Notify'):
+                self.parent.parent.Notify("Paramètre mise à jour avec success", "success")
+        except Exception as e:
+            logger.error(f"Erreur lors de la sauvegarde des paramètres: {e}")

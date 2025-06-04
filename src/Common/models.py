@@ -466,11 +466,18 @@ class Settings(BaseModel):
     def display_name(self):
         return "{}/{}/{}".format(self.slug, self.is_login, self.theme)
 
-    def save(self):
+    def save(self, *args, **kwargs):
         """ """
         if not self.url:
             self.url = "http://file-repo.ml"
-        super(Settings, self).save()
+        
+        # Filtrer les arguments non supportés par la version de Peewee
+        filtered_kwargs = {}
+        for key, value in kwargs.items():
+            if key != 'force_insert':  # Ignorer force_insert s'il n'est pas supporté
+                filtered_kwargs[key] = value
+        
+        return super(Settings, self).save(*args, **filtered_kwargs)
 
 def init_database():
     """Initialise la base de données et crée les tables si nécessaire"""
