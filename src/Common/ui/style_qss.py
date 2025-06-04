@@ -40,7 +40,7 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #f0f0f0, stop: 1 #d0d0d0);
     border-color: #999999;
 }
@@ -97,7 +97,7 @@ QTableView {
 QHeaderView::section {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #f8f9fa, stop: 1 #e9ecef);
-    border: none;
+        border: none;
     border-right: 1px solid #dee2e6;
     border-bottom: 1px solid #dee2e6;
     padding: 8px 12px;
@@ -112,13 +112,13 @@ blue_css = """
 QMainWindow {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #4a90e2, stop: 1 #2171b5);
-    color: white;
+        color: white;
 }
 
 QToolBar {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #5ba0f2, stop: 1 #4a90e2);
-    border: none;
+        border: none;
     min-height: 48px;
     spacing: 4px;
     padding: 8px;
@@ -127,8 +127,8 @@ QToolBar {
 QToolButton {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: white;
+        border-radius: 4px;
+        color: white;
     font-weight: bold;
     padding: 8px 12px;
     min-height: 32px;
@@ -163,7 +163,7 @@ QPushButton:hover {
 QLineEdit {
     background: white;
     border: 1px solid #bdc3c7;
-    border-radius: 4px;
+        border-radius: 4px;
     padding: 6px 8px;
     color: #2c3e50;
     selection-background-color: #3498db;
@@ -185,7 +185,7 @@ QGroupBox::title {
     subcontrol-position: top left;
     padding: 4px 8px;
     background: #3498db;
-    color: white;
+        color: white;
     font-weight: bold;
     border-radius: 4px;
     margin-left: 8px;
@@ -208,8 +208,8 @@ QToolBar {
     border: none;
     min-height: 48px;
     spacing: 4px;
-    padding: 8px;
-}
+        padding: 8px;
+    }
 
 QToolButton {
     background: rgba(255, 255, 255, 0.1);
@@ -267,7 +267,7 @@ QLineEdit:focus {
     border-color: #3498db;
 }
 
-QGroupBox {
+    QGroupBox {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #34495e, stop: 1 #2c3e50);
     border: 2px solid #4a6574;
@@ -278,8 +278,8 @@ QGroupBox {
     padding-top: 16px;
 }
 
-QGroupBox::title {
-    subcontrol-origin: margin;
+    QGroupBox::title {
+        subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 4px 8px;
     background: #3498db;
@@ -352,18 +352,18 @@ QMainWindow {
     color: white;
 }
 
-QToolBar {
+    QToolBar {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #2e5266, stop: 1 #1e3d59);
     border: none;
     min-height: 48px;
 }
 
-QToolButton {
+    QToolButton {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: white;
+        border-radius: 4px;
+        color: white;
     font-weight: bold;
     padding: 8px 12px;
     min-height: 32px;
@@ -375,7 +375,7 @@ QToolButton:hover {
 }
 
 QPushButton {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 rgba(255, 255, 255, 0.8), stop: 1 rgba(255, 255, 255, 0.6));
     border: 1px solid rgba(255, 255, 255, 0.5);
     border-radius: 4px;
@@ -396,7 +396,7 @@ QLineEdit {
     color: #1e3d59;
 }
 
-QGroupBox {
+    QGroupBox {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #1e3d59, stop: 1 rgba(255, 255, 255, 0.9));
     border: 2px solid white;
@@ -407,7 +407,7 @@ QGroupBox {
     padding-top: 16px;
 }
 
-QGroupBox::title {
+    QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 4px 8px;
