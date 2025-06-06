@@ -397,11 +397,10 @@ class Settings(BaseModel):
     DEFAULT = 2
     LCONFIG = ((PREV, "Precedent"), (DEFAULT, "Par defaut"), (CURRENT, "Actuel"))
 
-    DF = "systeme"
-    BL = "blue"
-    DK = "dark"
-    FAD = "Bnb"
-    THEME = {DF: "Par defaut", DK: "Dark", BL: "Blue", FAD: "Bnb"}
+    # DF = "default"
+    # BL = "light_modern"
+    # DK = "dark_modern"
+    # THEME = {DF: "Défaut", BL: "Moderne Clair", DK: "Moderne Sombre"}
 
     USA = "dollar"
     XOF = "xof"
@@ -420,7 +419,7 @@ class Settings(BaseModel):
     toolbar = peewee.BooleanField(default=True)
     toolbar_position = peewee.CharField(choices=POSITION, default=LEFT)
     url = peewee.CharField(default="http://file-repo.ml")
-    theme = peewee.CharField(default=DF)
+    theme = peewee.CharField(default="light_modern")
     devise = peewee.CharField(choices=DEVISE, default=XOF)
 
     @classmethod
@@ -437,7 +436,7 @@ class Settings(BaseModel):
                 toolbar=True,
                 toolbar_position=cls.LEFT,
                 url="http://file-repo.ml",
-                theme=cls.DF,
+                theme="default",
                 devise=cls.XOF
             )
             settings.save()

@@ -268,9 +268,9 @@ def get_available_themes():
         logger.error(f"Erreur lors de la récupération des thèmes disponibles: {e}")
         # Retourner une liste basique en cas d'erreur
         return {
-            Settings.DF: "Défaut",
-            Settings.BL: "Clair", 
-            Settings.DK: "Sombre"
+            "default": "Défaut",
+            "light_modern": "Clair", 
+            "dark_modern": "Sombre"
         }
 
 
@@ -291,7 +291,7 @@ def is_theme_dark(theme_name=None):
             theme_name = settings.theme
         
         # Listes des thèmes considérés comme sombres
-        dark_themes = [Settings.DK, "MODERN_DARK", "CLASSIC_DARK", "dark", "sombre"]
+        dark_themes = ["dark_modern", "CLASSIC_DARK", "dark", "sombre"]
         
         return theme_name.lower() in [t.lower() for t in dark_themes]
         

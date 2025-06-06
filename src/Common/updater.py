@@ -29,6 +29,22 @@ class UpdaterInit(QObject):
             logger.warning(
                 "Exception occurred while starting the updater thread: {}".format(exc)
             )
+    
+    def cleanup(self):
+        """Nettoie les ressources avant la fermeture"""
+        try:
+            logger.info("Nettoyage des threads de l'updater")
+            if hasattr(self, 'check') and self.check:
+                self.stopFlag.set()  # Signal d'arrêt
+                if self.check.isRunning():
+                    self.check.quit()
+                    if not self.check.wait(2000):  # Attendre 2 secondes max
+                        logger.warning("Force l'arrêt du thread updater")
+                        self.check.terminate()
+                        self.check.wait()  # Attendre la fin
+            logger.info("Nettoyage des threads updater terminé")
+        except Exception as e:
+            logger.error(f"Erreur lors du nettoyage des threads updater: {e}")
 
     def contact_server(self):
         logger.info("Contacting server for updates")
@@ -55,35 +71,44 @@ class TaskThreadUpdater(QThread):
         check_interval_without_server = 5
         check_interval_with_server = 50
 
-        while not self.stopped.wait(check_interval_without_server):
-            if access_server():
-                orga_slug = self.get_organization_slug()
+        try:
+            while not self.stopped.wait(check_interval_without_server):
+                try:
+                    if access_server():
+                        orga_slug = self.get_organization_slug()
 
-                if not orga_slug or orga_slug == "-":
-                    Network().get_or_inscribe_app()
-                else:
-                    lcse = is_valide_mac()[0]
-                    resp = Network().submit(
-                        "check_org", {"orga_slug": orga_slug, "lcse": lcse.code}
-                    )
-                    if (
-                        not resp.get("force_kill")
-                        or resp.get("can_use") != CConstants.IS_EXPIRED
-                    ):
-                        lcse.expiration_date = datetime.fromtimestamp(
-                            resp.get("expiration_date")
-                        )
-                        lcse.save()
+                        if not orga_slug or orga_slug == "-":
+                            Network().get_or_inscribe_app()
+                        else:
+                            lcse = is_valide_mac()[0]
+                            resp = Network().submit(
+                                "check_org", {"orga_slug": orga_slug, "lcse": lcse.code}
+                            )
+                            if (
+                                not resp.get("force_kill")
+                                or resp.get("can_use") != CConstants.IS_EXPIRED
+                            ):
+                                lcse.expiration_date = datetime.fromtimestamp(
+                                    resp.get("expiration_date")
+                                )
+                                lcse.save()
+                            else:
+                                lcse.remove_activation()
+
+                            if resp.get("is_syncro"):
+                                self.contact_server_signal.emit()
+
+                            check_interval_without_server = check_interval_with_server
                     else:
-                        lcse.remove_activation()
-
-                    if resp.get("is_syncro"):
-                        self.contact_server_signal.emit()
-
-                    check_interval_without_server = check_interval_with_server
-            else:
-                # logger.info("No server access")
-                pass
+                        # logger.info("No server access")
+                        pass
+                except Exception as e:
+                    logger.error(f"Erreur dans la boucle du thread updater: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Erreur fatale dans le thread updater: {e}")
+        finally:
+            logger.info("Thread updater terminé proprement")
 
     def get_organization_slug(self):
         return self.parent.get_organization_slug()

@@ -13,14 +13,9 @@ try:
     else:
         logger.warning("Impossible d'initialiser la base de données")
     
-    # Initialisation de l'updater si disponible
-    try:
-        UpdaterInit()
-        logger.info("Updater initialisé avec succès")
-    except Exception as e:
-        logger.warning(f"Erreur lors de l'initialisation de l'updater: {e}")
-    
-    logger.info("Initialisation terminée avec succès")
+    # L'updater sera initialisé manuellement par les fenêtres qui en ont besoin
+    # pour éviter les problèmes de threads non fermés
+    logger.info("Modules Common chargés avec succès")
     
 except ImportError as e:
     logger.error(f"Erreur lors de l'importation des modules: {e}")

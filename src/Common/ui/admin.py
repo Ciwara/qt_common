@@ -477,7 +477,7 @@ class SettingsTableWidget(FWidget):
             # Créer un objet mock avec des valeurs par défaut
             self.settings = type('MockSettings', (), {
                 'url': 'http://file-repo.ml',
-                'theme': Settings.DF,
+                'theme': "default",
                 'is_login': True,
                 'after_cam': 1,
                 'devise': Settings.XOF,

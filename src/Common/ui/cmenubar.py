@@ -65,44 +65,44 @@ class FMenuBar(QMenuBar, FWidget):
 
         if "theme" not in exclude_mn:
             _theme = preference.addMenu("Theme")
-            styles = Settings.THEME
-            list_theme = [
-                (
-                    {
-                        "name": k.upper(),
-                        "icon": "",
-                        "admin": False,
-                        "shortcut": "",
-                        "theme": k,
-                    }
-                )
-                for k in styles.keys()
-            ]
+            
+            # Récupération des thèmes disponibles depuis le système de thèmes
+            try:
+                from .theme_utils import get_available_themes
+                available_themes = get_available_themes()
+                logger.info(f"Thèmes disponibles: {available_themes}")
+            except Exception as e:
+                logger.warning(f"Erreur lors de la récupération des thèmes: {e}")
+                # Fallback vers les thèmes de base
+                available_themes = Settings.THEME
             
             # Récupération du thème actuel avec gestion d'erreur
             try:
                 settings = Settings.init_settings()
                 current_theme = settings.theme
+                logger.info(f"Thème actuel: {current_theme}")
             except Exception as e:
                 logger.warning(f"Erreur lors de la récupération des paramètres: {e}")
-                current_theme = Settings.DF  # Thème par défaut
+                current_theme = "default"   # Thème par défaut
             
-            for m in list_theme:
+            # Construction du menu des thèmes
+            for theme_key, theme_display_name in available_themes.items():
                 icon = ""
-                if m.get("theme") == current_theme:
+                if theme_key == current_theme:
                     icon = "accept"
+                    
                 el_menu = QAction(
                     QIcon("{}{}.png".format(CConstants.img_cmedia, icon)),
-                    m.get("name"),
+                    theme_display_name,  # Utiliser le nom d'affichage au lieu du code
                     self,
                 )
-                el_menu.setShortcut(m.get("shortcut"))
+                el_menu.setShortcut("")  # Pas de raccourci pour éviter les conflits
                 el_menu.triggered.connect(
-                    lambda checked, goto=m["theme"]: self.change_theme(goto)
+                    lambda checked, goto=theme_key: self.change_theme(goto)
                 )
-                _theme.addSeparator()
-                _theme.addAction(el_menu)
-                _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
+                _theme.addAction(el_menu)  # Pas de séparateur entre chaque thème
+                
+            _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
 
         if ow.exists():
             if ow.get().group == Owner.ADMIN:
@@ -394,8 +394,19 @@ Fichier à relancer: {main_file}"""
 
     # Aide
     def goto_help(self):
-        from .html_view import HTMLView
-        self.open_dialog(HTMLView, modal=True)
+        # html_view n'existe pas, on peut soit créer une aide simple, soit désactiver cette fonction
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self.parent,
+            "Aide",
+            f"""
+            <h2>Aide - {CConstants.APP_NAME}</h2>
+            <hr>
+            <p><b>Version:</b> {CConstants.APP_VERSION}</p>
+            <p><b>Description:</b> Application de gestion</p>
+            <p>Pour plus d'informations, consultez la documentation.</p>
+            """
+        )
 
     def open_logo_file(self):
         from .util import uopen_file

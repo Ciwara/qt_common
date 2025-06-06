@@ -5,7 +5,7 @@
 
 from datetime import date
 
-from PyQt5.QtCore import QSize, QSortFilterProxyModel, Qt
+from PyQt5.QtCore import QSize, QSortFilterProxyModel, Qt, QBasicTimer
 from PyQt5.QtGui import (
     QBrush,
     QColor,
@@ -19,6 +19,7 @@ from PyQt5.QtGui import (
     QPen,
     QPixmap,
     QRadialGradient,
+    QFontMetrics,
 )
 from PyQt5.QtWidgets import (
     QComboBox,
@@ -35,6 +36,9 @@ from PyQt5.QtWidgets import (
     QToolButton,
     QWidget,
 )
+
+# Imports pour compatibilité avec les anciens codes
+from PyQt5 import QtCore, QtGui
 
 from ..periods import Period
 from .statusbar import GStatusBar
@@ -776,16 +780,16 @@ class ExtendedComboBox(QComboBox):
 
 class WigglyWidget(QWidget):
     def __init__(self, test, parent=None):
-        QtGui.QWidget.__init__(self, parent)
+        super(WigglyWidget, self).__init__(parent)
 
-        self.setBackgroundRole(QtGui.QPalette.Midlight)
+        self.setBackgroundRole(QPalette.Midlight)
         # print(test)
         newFont = self.font()
         newFont.setPointSize(newFont.pointSize() + 20)
         self.setFont(newFont)
 
-        self.timer = QtCore.QBasicTimer()
-        self.text = QtCore.QString(test)
+        self.timer = QBasicTimer()
+        self.text = str(test)  # Conversion directe en string
 
         self.step = 0
         self.timer.start(60, self)
@@ -810,30 +814,30 @@ class WigglyWidget(QWidget):
             -38,
         ]
 
-        metrics = QtGui.QFontMetrics(self.font())
-        x = (self.width() - metrics.width(self.text)) / 2
+        metrics = QFontMetrics(self.font())
+        x = (self.width() - metrics.horizontalAdvance(self.text)) / 2
         y = (self.height() + metrics.ascent() - metrics.descent()) / 2
-        color = QtGui.QColor()
+        color = QColor()
 
-        painter = QtGui.QPainter(self)
+        painter = QPainter(self)
 
-        for i in range(self.text.size()):
+        for i in range(len(self.text)):
             index = (self.step + i) % 16
             color.setHsv((15 - index) * 16, 255, 191)
             painter.setPen(color)
             painter.drawText(
-                x,
-                y - ((sineTable[index] * metrics.height()) / 400),
-                QtCore.QString(self.text[i]),
+                int(x),
+                int(y - ((sineTable[index] * metrics.height()) / 400)),
+                self.text[i],
             )
-            x += metrics.width(self.text[i])
+            x += metrics.horizontalAdvance(self.text[i])
 
     def setText(self, newText):
-        self.text = QtCore.QString(newText)
+        self.text = str(newText)
 
     def timerEvent(self, event):
         if event.timerId() == self.timer.timerId():
             self.step = self.step + 1
             self.update()
         else:
-            QtGui.QWidget.timerEvent(event)
+            super(WigglyWidget, self).timerEvent(event)

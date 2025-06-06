@@ -18,6 +18,7 @@ class Notification(QtWidgets.QWidget):
         super(Notification, self).__init__(parent=parent, *args, **kwargs)
 
         self.mssg = str(mssg)
+        self.workThread = None
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
         if type_mssg == "success":
             background = "green"
@@ -49,7 +50,19 @@ class Notification(QtWidgets.QWidget):
         self.setLayout(vbox)
 
     def done(self):
+        self.cleanup()
         self.close()
+        
+    def cleanup(self):
+        """Nettoie les ressources avant la fermeture"""
+        try:
+            if self.workThread and self.workThread.isRunning():
+                self.workThread.stop()
+                if not self.workThread.wait(1000):  # Attendre 1 seconde max
+                    self.workThread.terminate()
+                    self.workThread.wait()
+        except Exception as e:
+            print(f"Erreur lors du nettoyage de la notification: {e}")
 
     def disappear(self):
         self.f -= 0.0002
@@ -59,6 +72,11 @@ class Notification(QtWidgets.QWidget):
         self.move(self.x, self.y)
         self.y += 1
 
+    def closeEvent(self, event):
+        """Override closeEvent pour nettoyer les threads"""
+        self.cleanup()
+        super().closeEvent(event)
+
 
 class WorkThread(QtCore.QThread):
     update = QtCore.pyqtSignal()
@@ -67,14 +85,29 @@ class WorkThread(QtCore.QThread):
 
     def __init__(self, mv):
         super(WorkThread, self).__init__()
+        self.should_stop = False
+
+    def stop(self):
+        """Arrête le thread proprement"""
+        self.should_stop = True
 
     def run(self):
-        while True:
+        try:
+            # Animation initiale
             for i in range(30):
+                if self.should_stop:
+                    return
                 time.sleep(0.01)
                 self.update.emit()
+                
+            if self.should_stop:
+                return
+                
             time.sleep(0.1)
             self.vanish.emit()
             time.sleep(0.1)
             self.finished.emit()
-            return
+        except Exception as e:
+            print(f"Erreur dans WorkThread: {e}")
+        finally:
+            self.should_stop = True

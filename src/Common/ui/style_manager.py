@@ -735,10 +735,10 @@ def get_style():
         
         # Mapping des anciens thèmes vers les nouveaux
         theme_mapping = {
-            Settings.DF: ThemeNames.DEFAULT,
-            Settings.BL: ThemeNames.LIGHT_MODERN,
-            Settings.DK: ThemeNames.DARK_MODERN,
-            Settings.FAD: ThemeNames.DEFAULT,  # Temporaire
+            "default": ThemeNames.DEFAULT,
+            "light_modern": ThemeNames.LIGHT_MODERN,
+            "dark_modern": ThemeNames.DARK_MODERN,
+            "Bnb": ThemeNames.DEFAULT,  # Temporaire
         }
         
         current_theme = theme_mapping.get(settings.theme, ThemeNames.DEFAULT)

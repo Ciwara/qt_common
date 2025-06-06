@@ -32,7 +32,34 @@ class GStatusBar(QStatusBar):
         logger.info("Server option active.")
         self.stopFlag = Event()
         self.info_label = QLabel()
+        self.check_serv = None
         self.init_ui()
+    
+    def cleanup(self):
+        """Nettoie les ressources avant la fermeture"""
+        try:
+            logger.info("Nettoyage des threads de la barre de statut")
+            # Arrêter le thread serveur
+            if hasattr(self, 'check_serv') and self.check_serv:
+                self.stopFlag.set()  # Signal d'arrêt
+                if self.check_serv.isRunning():
+                    self.check_serv.quit()
+                    if not self.check_serv.wait(2000):  # Attendre 2 secondes max
+                        logger.warning("Force l'arrêt du thread serveur")
+                        self.check_serv.terminate()
+                        self.check_serv.wait()  # Attendre la fin
+                    
+            # Arrêter les autres threads de téléchargement si ils existent
+            if hasattr(self, 'download_thread') and self.download_thread:
+                if self.download_thread.isRunning():
+                    self.download_thread.quit()
+                    if not self.download_thread.wait(1000):
+                        self.download_thread.terminate()
+                        self.download_thread.wait()
+                        
+            logger.info("Nettoyage des threads terminé")
+        except Exception as e:
+            logger.error(f"Erreur lors du nettoyage des threads: {e}")
 
     def init_ui(self):
         icon_label = QLabel()
@@ -67,13 +94,13 @@ class GStatusBar(QStatusBar):
     def start_download(self):
         self.progress_bar = QProgressBar(self)
         self.addWidget(self.progress_bar, 2)
-        download_thread = TaskThreadDownload(self)
-        download_thread.download_finish_signal.connect(self.download_finish)
+        self.download_thread = TaskThreadDownload(self)
+        self.download_thread.download_finish_signal.connect(self.download_finish)
 
         try:
-            download_thread.start()
+            self.download_thread.start()
         except Exception as exc:
-            logger.error("Failed to start download thread: {exc}")
+            logger.error(f"Failed to start download thread: {exc}")
 
     def download_finish(self):
         self.download_button.hide()
@@ -98,7 +125,7 @@ class GStatusBar(QStatusBar):
         self.download_button.setEnabled(False)
         self.info_label.setText("Downloading in progress...")
 
-        self.installer_name = "{self.check_serv.data.get('app')}.exe"
+        self.installer_name = f"{self.check_serv.data.get('app')}.exe"
         url = get_server_url(self.check_serv.data.get("setup_file_url"))
         response = requests.get(url, stream=True)
 
@@ -134,7 +161,7 @@ class GStatusBar(QStatusBar):
         if lse:
             lse_style, r_lse = (
                 "color:green",
-                "<b>{lse.remaining_days()}</b>" if valid else "Expired",
+                f"<b>{lse.remaining_days()}</b>" if valid else "Expired",
             )
 
         self.info_label.setText(
@@ -146,7 +173,9 @@ class GStatusBar(QStatusBar):
             """
         )
 
-        # self.check_serv_contact_server()
+    def show_failure_message(self):
+        """Affiche un message d'erreur en cas d'échec"""
+        self.info_label.setText("Installation failed.")
 
 
 class TaskThreadDownload(QThread):
@@ -157,8 +186,11 @@ class TaskThreadDownload(QThread):
         self.parent = parent
 
     def run(self):
-        self.parent.download_setup_file()
-        self.download_finish_signal.emit()
+        try:
+            self.parent.download_setup_file()
+            self.download_finish_signal.emit()
+        except Exception as e:
+            logger.error(f"Erreur lors du téléchargement: {e}")
 
 
 class TaskThreadServer(QThread):
@@ -169,27 +201,37 @@ class TaskThreadServer(QThread):
         QThread.__init__(self, parent)
         self.parent = parent
         self.stopped = parent.stopFlag
+        self.data = {}
 
     def run(self):
         check_interval = 5
         from Common.models import Organization
 
-        while not self.stopped.wait(check_interval):
-            if Organization().select().count() > 0:
-                orga_slug = Organization.get(id=1).slug
-                if access_server():
-                    logger.info("Server access is OK")
-                    if not orga_slug:
-                        Network().get_or_inscribe_app()
-                    else:
-                        self.data = Network().update_version_checker()
-                        check_interval = 150
-                        if not self.data:
-                            return
-                        if not self.data.get("is_last"):
-                            self.download_signal.emit()
-                else:
-                    # logger.info("No server access")
-                    pass
+        try:
+            while not self.stopped.wait(check_interval):
+                try:
+                    if Organization().select().count() > 0:
+                        orga_slug = Organization.get(id=1).slug
+                        if access_server():
+                            logger.info("Server access is OK")
+                            if not orga_slug:
+                                Network().get_or_inscribe_app()
+                            else:
+                                self.data = Network().update_version_checker()
+                                check_interval = 150
+                                if not self.data:
+                                    return
+                                if not self.data.get("is_last"):
+                                    self.download_signal.emit()
+                        else:
+                            # logger.info("No server access")
+                            pass
 
-                self.contact_server_signal.emit()
+                        self.contact_server_signal.emit()
+                except Exception as e:
+                    logger.error(f"Erreur dans la boucle du thread serveur: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Erreur fatale dans le thread serveur: {e}")
+        finally:
+            logger.info("Thread serveur terminé proprement")
