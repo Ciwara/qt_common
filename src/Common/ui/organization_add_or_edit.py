@@ -6,7 +6,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QFormLayout,
     QGroupBox,
@@ -78,12 +77,6 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
     def organization_group_box(self):
         self.organGroupBoxBtt = QGroupBox(self.tr("Nouvelle Organisation"))
 
-        self.liste_devise = Organization.DEVISE
-        # Combobox widget
-        self.box_devise = QComboBox()
-        for index in self.liste_devise:
-            self.box_devise.addItem("{} {}".format(self.liste_devise[index], index))
-
         self.checked = QCheckBox("Active")
         self.checked.setChecked(True)
         self.checked.setToolTip(
@@ -102,7 +95,6 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
         formbox.addRow(FormLabel("Nom de l'organisation *"), self.name_orga)
         formbox.addRow(FormLabel("Tel *"), self.phone)
         formbox.addRow(FormLabel("Activer la saisie de mot de passe"), self.checked)
-        formbox.addRow(FormLabel(u"Devise"), self.box_devise)
         formbox.addRow(FormLabel("B.P"), self.bp)
         formbox.addRow(FormLabel("E-mail:"), self.email_org)
         formbox.addRow(FormLabel("Adresse complete:"), self.adress_org)
@@ -121,7 +113,6 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
             return
         name_orga = str(self.name_orga.text())
         logo_path = str(self.logo_orga.text())
-        device = str(self.box_devise.currentText().split()[1])
         bp = str(self.bp.text())
         email_org = str(self.email_org.text())
         phone = str(self.phone.text())
@@ -129,7 +120,6 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
 
         org = Organization()
         org.phone = phone
-        org.device = device
         org.name_orga = name_orga
         org.logo_orga = logo_path
         org.email_org = email_org
