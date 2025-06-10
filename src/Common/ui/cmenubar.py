@@ -66,15 +66,19 @@ class FMenuBar(QMenuBar, FWidget):
         if "theme" not in exclude_mn:
             _theme = preference.addMenu("Theme")
             
-            # Récupération des thèmes disponibles depuis le système de thèmes
+            # Récupération des thèmes disponibles depuis le nouveau système centralisé
             try:
-                from .theme_utils import get_available_themes
+                from .themes import get_available_themes
                 available_themes = get_available_themes()
                 logger.info(f"Thèmes disponibles: {available_themes}")
             except Exception as e:
                 logger.warning(f"Erreur lors de la récupération des thèmes: {e}")
                 # Fallback vers les thèmes de base
-                available_themes = Settings.THEME
+                available_themes = {
+                    "default": "Défaut",
+                    "light_modern": "Moderne Clair", 
+                    "dark_modern": "Moderne Sombre"
+                }
             
             # Récupération du thème actuel avec gestion d'erreur
             try:
@@ -201,8 +205,8 @@ class FMenuBar(QMenuBar, FWidget):
     def apply_theme_dynamically(self):
         """Applique le nouveau thème sans redémarrer l'application"""
         try:
-            # Utiliser la nouvelle fonction utilitaire pour appliquer le thème à toute l'application
-            from .theme_utils import apply_theme_immediately, get_theme_style
+            # Utiliser le nouveau gestionnaire de thèmes centralisé
+            from .themes import apply_theme_immediately, get_theme_manager
             
             # Appliquer le thème à TOUTE l'application (toutes fenêtres et dialogues)
             success = apply_theme_immediately()
@@ -210,15 +214,9 @@ class FMenuBar(QMenuBar, FWidget):
             if success:
                 logger.info("Thème appliqué dynamiquement avec succès à toute l'application")
                 
-                # Notifier l'utilisateur du changement
-                if hasattr(self.parent, 'Notify'):
-                    self.parent.Notify("Thème appliqué avec succès à toute l'application !", "success")
-                
-                # Message dans la barre de statut si disponible
-                if hasattr(self.parent, 'statusBar') and callable(self.parent.statusBar):
-                    status_bar = self.parent.statusBar()
-                    if status_bar:
-                        status_bar.showMessage("Thème appliqué à toutes les fenêtres", 3000)
+                # Utiliser le gestionnaire pour la notification
+                manager = get_theme_manager()
+                manager.notify_theme_change(self.parent, manager.get_current_theme())
                 
             else:
                 logger.warning("Échec de l'application du thème")

@@ -347,22 +347,35 @@ QScrollBar::handle:horizontal:hover {
 
 # ===== CONFIGURATION DES THÈMES =====
 
-# Dictionnaire principal des thèmes disponibles
+# Dictionnaire principal des thèmes avec leurs styles CSS
+# Utilise la configuration centralisée pour les métadonnées
+try:
+    from .theme_config import ThemeConfig
+    THEMES_METADATA = ThemeConfig.THEMES
+except ImportError:
+    logger.warning("Configuration centralisée des thèmes non disponible, utilisation du fallback")
+    THEMES_METADATA = {
+        "default": {"name": "Défaut", "is_dark": False},
+        "light_modern": {"name": "Moderne Clair", "is_dark": False},
+        "dark_modern": {"name": "Moderne Sombre", "is_dark": True}
+    }
+
+# Mapping des thèmes avec leurs styles CSS
 AVAILABLE_THEMES = {
     "default": {
-        "name": "Défaut",
+        "name": THEMES_METADATA.get("default", {}).get("name", "Défaut"),
         "css": default_theme,
-        "is_dark": False
+        "is_dark": THEMES_METADATA.get("default", {}).get("is_dark", False)
     },
     "light_modern": {
-        "name": "Moderne Clair", 
+        "name": THEMES_METADATA.get("light_modern", {}).get("name", "Moderne Clair"), 
         "css": MODERN_LIGHT if MODERN_STYLES_AVAILABLE else light_modern_theme,
-        "is_dark": False
+        "is_dark": THEMES_METADATA.get("light_modern", {}).get("is_dark", False)
     },
     "dark_modern": {
-        "name": "Moderne Sombre",
+        "name": THEMES_METADATA.get("dark_modern", {}).get("name", "Moderne Sombre"),
         "css": MODERN_DARK if MODERN_STYLES_AVAILABLE else dark_modern_theme,
-        "is_dark": True
+        "is_dark": THEMES_METADATA.get("dark_modern", {}).get("is_dark", True)
     }
 }
 

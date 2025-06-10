@@ -489,7 +489,21 @@ class SettingsTableWidget(FWidget):
         vbox = QVBoxLayout()
         # self.slug_field =
         self.url_field = LineEdit(str(self.settings.url or "http://file-repo.ml"))
-        self.list_theme = Settings.THEME
+        
+        # Récupération des thèmes depuis le nouveau système centralisé
+        try:
+            from .themes import get_available_themes
+            self.list_theme = get_available_themes()
+            logger.debug(f"Thèmes chargés pour l'administration: {self.list_theme}")
+        except Exception as e:
+            logger.warning(f"Erreur lors du chargement des thèmes: {e}")
+            # Fallback
+            self.list_theme = {
+                "default": "Défaut",
+                "light_modern": "Moderne Clair",
+                "dark_modern": "Moderne Sombre"
+            }
+        
         # Combobox widget
         self.box_theme = QComboBox()
         for index, value in enumerate(self.list_theme):

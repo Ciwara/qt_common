@@ -17,7 +17,7 @@ from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
 from .ui.restoration_view import RestorationViewWidget
-from .ui.style_qss import theme
+
 from .ui.user_add_or_edit import NewOrEditUserViewWidget
 from .ui.util import is_valide_mac
 from .ui.window import FWindow
@@ -90,7 +90,7 @@ def fallback_theme_application():
         from PyQt5.QtWidgets import QApplication
         app = QApplication.instance()
         if app:
-            app.setStyleSheet(theme)
+            # app.setStyleSheet(theme)
             logger.info("Thème appliqué via fallback à toute l'application")
     except Exception as e:
         logger.error(f"Erreur lors de l'application du thème fallback: {e}")
@@ -169,6 +169,7 @@ def cmain(test=False):
             window = initialize_main_window()
             logger.info("Fenêtre principale externe utilisée")
         except Exception as e:
+            #raise e
             logger.warning(f"Impossible d'utiliser la fenêtre principale externe: {e}")
             try:
                 # Utiliser la fenêtre commune du module Common
