@@ -58,7 +58,7 @@ class FMainWindow(QMainWindow):
     
     themeChanged = pyqtSignal(str)  # Signal émis lors du changement de thème
     
-    def __init__(self, parent=0, *args, **kwargs):
+    def __init__(self, parent=None, *args, **kwargs):
         QMainWindow.__init__(self)
         print("FMainWindow v3.0 - Mode moderne activé")
         
@@ -100,7 +100,7 @@ class FMainWindow(QMainWindow):
                 shadow.setColor(QColor(0, 0, 0, 60))
                 shadow.setOffset(0, 10)
                 # Note: L'ombre de fenêtre est gérée par l'OS moderne
-            except:
+            except Exception:
                 pass
                 
     def _setup_theme_system(self):
@@ -173,7 +173,7 @@ class FMainWindow(QMainWindow):
 
     def logout(self):
         from ..models import Owner
-        for ur in Owner.select().where(Owner.islog == True):
+        for ur in Owner.select().where(Owner.islog):
             ur.islog = False
             ur.save()
 
@@ -186,7 +186,7 @@ class FMainWindow(QMainWindow):
 class FWidget(QWidget):
     """Widget de base moderne avec support des thèmes"""
     
-    def __init__(self, parent=0, *args, **kwargs):
+    def __init__(self, parent=None, *args, **kwargs):
         QWidget.__init__(self, parent=parent, *args, **kwargs)
         self.pp = parent
         self.current_theme = "light_modern"
@@ -203,8 +203,8 @@ class FWidget(QWidget):
             try:
                 self.current_theme = self.pp.get_current_theme()
                 self.apply_theme(self.current_theme)
-            except:
-                pass
+            except Exception as e:
+                print(f"Erreur lors de l'héritage du thème: {e}")
 
     def _setup_modern_features(self):
         """Configuration des fonctionnalités modernes"""
@@ -215,6 +215,9 @@ class FWidget(QWidget):
         """Applique un thème à ce widget"""
         try:
             from .themes.styles import get_theme_style
+            # S'assurer que current_theme existe
+            if not hasattr(self, 'current_theme'):
+                self.current_theme = "light_modern"
             # Appliquer seulement si le thème a changé
             if theme_key != self.current_theme:
                 style = get_theme_style(theme_key)
@@ -240,11 +243,13 @@ class FWidget(QWidget):
         
     def get_current_theme(self) -> str:
         """Retourne le thème actuel du widget"""
+        if not hasattr(self, 'current_theme'):
+            self.current_theme = "light_modern"
         return self.current_theme
 
 
 class FDialog(QDialog, FWidget):
-    def __init__(self, parent=0, *args, **kwargs):
+    def __init__(self, parent=None, *args, **kwargs):
         QDialog.__init__(self, parent=parent, *args, **kwargs)
         
         # S'assurer que le dialogue hérite automatiquement du thème de l'application

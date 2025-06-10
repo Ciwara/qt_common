@@ -193,7 +193,7 @@ class ExamplePageWidget(FWidget):
 
 class CommonMainWindow(FMainWindow):
     def __init__(self, parent=None, *args, **kwargs):
-        QMainWindow.__init__(self, parent=parent, *args, **kwargs)
+        FMainWindow.__init__(self, parent=parent, *args, **kwargs)
 
         self.setWindowIcon(QIcon(f"{CConstants.APP_LOGO}"))
         self.setWindowTitle(f"{CConstants.APP_NAME} {CConstants.APP_VERSION}")

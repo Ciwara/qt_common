@@ -82,7 +82,7 @@ def get_base_styles():
     return """
     /* Styles de base pour tous les thèmes */
     * {
-        font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+                 font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
     }
     
     QWidget {
@@ -1306,7 +1306,15 @@ def get_theme_style(theme_key=None):
         
         if theme_key in theme_styles:
             style = theme_styles[theme_key]()
-            logger.debug(f"Style généré pour le thème: {theme_key}")
+            
+            # Optimiser les polices selon le système
+            try:
+                from ..font_utils import optimize_css_fonts
+                style = optimize_css_fonts(style)
+                logger.debug(f"Style généré et optimisé pour le thème: {theme_key}")
+            except ImportError:
+                logger.debug(f"Optimisation des polices non disponible pour le thème: {theme_key}")
+            
             return style
         else:
             logger.warning(f"Thème '{theme_key}' non trouvé, utilisation du thème par défaut")
@@ -1345,7 +1353,7 @@ def get_theme_preview_style(theme_key):
         # Extraire les couleurs principales pour l'aperçu
         preview_style = f"""
         QWidget {{
-            font-family: "Segoe UI", Arial, sans-serif;
+            font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
             font-size: 12px;
         }}
         """

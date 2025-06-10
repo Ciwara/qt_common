@@ -28,7 +28,8 @@ class ModernButton(QPushButton):
         
         # Configuration de base
         self.setMinimumHeight(40)
-        self.setFont(QFont("Segoe UI", 10, QFont.Medium))
+        from .font_utils import create_system_font
+        self.setFont(create_system_font(10, QFont.Medium))
         
         # Icône si fournie
         if icon:
@@ -750,7 +751,8 @@ def create_modern_layout(spacing=12, margins=(16, 16, 16, 16)):
 
 def apply_modern_font(widget, size=14, weight=QFont.Normal):
     """Applique une police moderne à un widget"""
-    font = QFont("Segoe UI", size, weight)
+    from .font_utils import create_system_font
+    font = create_system_font(size, weight)
     widget.setFont(font)
 
 # Exportation des widgets principaux
