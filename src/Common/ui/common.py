@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 # maintainer: Fad
-
+# Version 3.0 - Intégration thèmes modernes et améliorations UI
 
 from datetime import date
+from typing import Optional, Union, Any
 
-from PyQt5.QtCore import QSize, QSortFilterProxyModel, Qt, QBasicTimer
+from PyQt5.QtCore import QSize, QSortFilterProxyModel, Qt, QBasicTimer, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import (
     QBrush,
     QColor,
@@ -20,8 +21,10 @@ from PyQt5.QtGui import (
     QPixmap,
     QRadialGradient,
     QFontMetrics,
+    QLinearGradient,
 )
 from PyQt5.QtWidgets import (
+    QApplication,
     QComboBox,
     QCommandLinkButton,
     QCompleter,
@@ -35,10 +38,11 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QToolButton,
     QWidget,
+    QFrame,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGraphicsDropShadowEffect,
 )
-
-# Imports pour compatibilité avec les anciens codes
-from PyQt5 import QtCore, QtGui
 
 from ..periods import Period
 from .statusbar import GStatusBar
@@ -50,22 +54,99 @@ except Exception as e:
 
 
 class FMainWindow(QMainWindow):
+    """Fenêtre principale moderne avec support complet des thèmes"""
+    
+    themeChanged = pyqtSignal(str)  # Signal émis lors du changement de thème
+    
     def __init__(self, parent=0, *args, **kwargs):
         QMainWindow.__init__(self)
-        print("FMainWindow")
-        # self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
-        self.setWindowIcon(
-            QIcon.fromTheme(f"logo", QIcon("{CConstants.img_media}logo.png"))
-        )
-        print(f"{CConstants.img_media=}")
+        print("FMainWindow v3.0 - Mode moderne activé")
+        
+        # Configuration de base
+        self.current_theme = "light_modern"  # Thème par défaut
+        self._setup_window()
+        self._setup_theme_system()
+        self._setup_animations()
+        
+        # Configuration existante
+        try:
+            self.setWindowIcon(
+                QIcon.fromTheme(f"logo", QIcon(f"{CConstants.img_media}logo.png"))
+            )
+            self.setWindowTitle(CConstants.APP_NAME)
+            self.setWindowIcon(QIcon(CConstants.APP_LOGO))
+        except:
+            print("Configuration des icônes échouée - mode dégradé")
+        
+        # StatusBar moderne
         self.statusbar = GStatusBar(self)
         self.setStatusBar(self.statusbar)
-
+        
+        # Dimensions et redimensionnement
         self.wc = self.width()
         self.hc = self.height()
         self.resize(self.wc, self.hc)
-        self.setWindowTitle(CConstants.APP_NAME)
-        self.setWindowIcon(QIcon(CConstants.APP_LOGO))
+        
+    def _setup_window(self):
+        """Configuration moderne de la fenêtre"""
+        # Fenêtre moderne avec coins arrondis sur les systèmes supportés
+        self.setMinimumSize(800, 600)
+        
+        # Ombres modernes pour la fenêtre
+        if hasattr(self, 'setWindowFlag'):
+            try:
+                shadow = QGraphicsDropShadowEffect()
+                shadow.setBlurRadius(20)
+                shadow.setColor(QColor(0, 0, 0, 60))
+                shadow.setOffset(0, 10)
+                # Note: L'ombre de fenêtre est gérée par l'OS moderne
+            except:
+                pass
+                
+    def _setup_theme_system(self):
+        """Configuration du système de thèmes"""
+        try:
+            from .themes.styles import get_theme_style, get_available_themes
+            self.available_themes = get_available_themes()
+            self.apply_theme(self.current_theme)
+        except ImportError:
+            print("Système de thèmes non disponible - utilisation du style par défaut")
+            
+    def _setup_animations(self):
+        """Configuration des animations modernes"""
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(300)
+        self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
+        
+    def apply_theme(self, theme_key: str):
+        """Applique un thème moderne à la fenêtre"""
+        try:
+            from .themes.styles import get_theme_style
+            style = get_theme_style(theme_key)
+            self.setStyleSheet(style)
+            self.current_theme = theme_key
+            self.themeChanged.emit(theme_key)
+            print(f"Thème appliqué: {theme_key}")
+            
+            # Appliquer le thème à tous les widgets enfants
+            self._apply_theme_to_children()
+            
+        except Exception as e:
+            print(f"Erreur lors de l'application du thème {theme_key}: {e}")
+            
+    def _apply_theme_to_children(self):
+        """Applique le thème à tous les widgets enfants"""
+        for widget in self.findChildren(QWidget):
+            if hasattr(widget, 'apply_theme'):
+                widget.apply_theme(self.current_theme)
+                
+    def get_current_theme(self) -> str:
+        """Retourne le thème actuel"""
+        return self.current_theme
+        
+    def get_available_themes(self) -> dict:
+        """Retourne les thèmes disponibles"""
+        return getattr(self, 'available_themes', {})
 
     def set_window_title(self, page_name):
         self.setWindowTitle(" > ".join([CConstants.APP_NAME, page_name]))
@@ -75,8 +156,6 @@ class FMainWindow(QMainWindow):
         # trouve les dimensions du container
         self.wc = self.width()
         self.hc = self.height()
-        # print(self.wc)
-        # print(self.hc)
 
     def change_context(self, context_widget, *args, **kwargs):
         # instanciate context
@@ -105,22 +184,51 @@ class FMainWindow(QMainWindow):
 
 
 class FWidget(QWidget):
+    """Widget de base moderne avec support des thèmes"""
+    
     def __init__(self, parent=0, *args, **kwargs):
         QWidget.__init__(self, parent=parent, *args, **kwargs)
         self.pp = parent
+        self.current_theme = "light_modern"
+        
+        # Auto-application du thème si le parent en a un
+        self._inherit_parent_theme()
+        
+        # Configuration moderne
+        self._setup_modern_features()
+
+    def _inherit_parent_theme(self):
+        """Hérite automatiquement du thème du parent"""
+        if hasattr(self.pp, 'get_current_theme'):
+            try:
+                self.current_theme = self.pp.get_current_theme()
+                self.apply_theme(self.current_theme)
+            except:
+                pass
+
+    def _setup_modern_features(self):
+        """Configuration des fonctionnalités modernes"""
+        # Activation des effets visuels modernes
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        
+    def apply_theme(self, theme_key: str):
+        """Applique un thème à ce widget"""
+        try:
+            from .themes.styles import get_theme_style
+            # Appliquer seulement si le thème a changé
+            if theme_key != self.current_theme:
+                style = get_theme_style(theme_key)
+                self.setStyleSheet(style)
+                self.current_theme = theme_key
+                self.update()  # Force le rafraîchissement visuel
+        except Exception as e:
+            print(f"Erreur lors de l'application du thème au widget: {e}")
 
     def page_names(self, app_name, txt):
         self.parentWidget().setWindowTitle("{} | {}".format(app_name, txt.upper()))
-        # self.wc = self.pp.wc - 100
-        # self.hc = self.pp.hc
-        # self.css = """
-        #     QWidget{
-        #      background: #fff;
-        #     }
-        #     """
-        # self.setStyleSheet(self.css)
 
     def refresh(self):
+        """Méthode de rafraîchissement - peut être surchargée"""
         pass
 
     def change_main_context(self, context_widget, *args, **kwargs):
@@ -129,6 +237,10 @@ class FWidget(QWidget):
 
     def open_dialog(self, dialog, modal=False, *args, **kwargs):
         return self.parentWidget().open_dialog(dialog, modal=modal, *args, **kwargs)
+        
+    def get_current_theme(self) -> str:
+        """Retourne le thème actuel du widget"""
+        return self.current_theme
 
 
 class FDialog(QDialog, FWidget):
@@ -158,17 +270,6 @@ class FDialog(QDialog, FWidget):
                 pass  # Ignorer silencieusement les erreurs pour ne pas casser l'application
 
 
-# class FWebView(QWebView):
-
-#     def __init__(self, parent=0, *args, **kwargs):
-#         QWebView.__init__(self, parent=parent, *args, **kwargs)
-#         self.pp = parent
-
-#     def change_main_context(self, context_widget, *args, **kwargs):
-# return self.parentWidget().change_context(context_widget, *args,
-# **kwargs)
-
-
 class PyTextViewer(QTextEdit):
     # Initialise the instance.
     def __init__(self, parent=None):
@@ -181,15 +282,6 @@ class TabPane(QTabBar):
     def __init__(self, parent=None):
         super(TabPane, self).__init__(parent)
 
-        css = """
-        TabPane{
-            border: 1px solid gray;
-            border-radius: 7px;
-            background: QLinearGradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #4984C7, stop: 1 #4C7);
-        }
-        """
-        # self.setStyleSheet(css)
-
     def addBox(self, box):
         self.setLayout(box)
 
@@ -197,15 +289,10 @@ class TabPane(QTabBar):
 class FLabel(QLabel):
     def __init__(self, *args, **kwargs):
         super(FLabel, self).__init__(*args, **kwargs)
-        # self.setFont(QFont("Times New Roman", 50))
-        css = """
-                color: gry;
-              """
-        # self.setStyleSheet(css)
         font = QFont()
         font.setBold(True)
         font.setWeight(75)
-        self.setFont(font)
+        # self.setFont(font)
         self.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
 
 
@@ -213,20 +300,8 @@ class FRLabel(QLabel):
     def __init__(self, *args, **kwargs):
         super(FRLabel, self).__init__(*args, **kwargs)
         # self.setFont(QFont("Times New Roman", 50))
-        css = """
-            border-style: outset;
-            border-width: 2px;
-            border-radius: 10px;
-            border-color: beige;
-            font: bold 30px;
-            max-width: 20em;
-            padding: 6px;
-        """
-        self.setStyleSheet(css)
-        font = QFont()
-        # font.setBold(True)
-        # font.setWeight(75)
-        # self.setFont(font)
+       
+
         self.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
 
 
@@ -236,11 +311,6 @@ class FPageTitle(FLabel):
         # self.setFont(QFont("Times New Roman", 50))
         self.setAlignment(Qt.AlignCenter)
 
-        css = """
-                font-weight: bold;
-                font-size: 20px;
-                color: gry;"""
-        # self.setStyleSheet(css)
 
 
 class FBoxTitle(FLabel):
@@ -409,13 +479,69 @@ class QToolBadgeButton(QToolButton):
 
 
 class Button(QCommandLinkButton):
+    """Bouton de base amélioré avec support des thèmes"""
+    
     def __init__(self, *args, **kwargs):
         super(Button, self).__init__(*args, **kwargs)
+        
+        self.current_theme = "light_modern"
         self.setAutoDefault(True)
         self.setIcon(QIcon.fromTheme("", QIcon("")))
         self.setCursor(Qt.PointingHandCursor)
-        # self.setCursor(Qt.ForbiddenCursor)
-        # self.setFixedSize(100, 40)
+        
+        # Configuration moderne
+        self._setup_modern_button()
+        self._inherit_theme()
+        
+    def _setup_modern_button(self):
+        """Configuration moderne du bouton"""
+        self.setMinimumHeight(35)
+        
+        # Ombre légère
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(8)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        shadow.setOffset(0, 2)
+        self.setGraphicsEffect(shadow)
+        
+    def _inherit_theme(self):
+        """Hérite du thème du parent si disponible"""
+        if hasattr(self.parent(), 'get_current_theme'):
+            try:
+                self.apply_theme(self.parent().get_current_theme())
+            except:
+                pass
+                
+    def apply_theme(self, theme_key: str):
+        """Applique un thème au bouton"""
+        try:
+            from .themes.styles import get_theme_colors
+            colors = get_theme_colors(theme_key)
+            
+            primary_color = colors.get("primary", "#0d6efd")
+            bg_color = colors.get("bg", "#ffffff")
+            
+            style = f"""
+            QCommandLinkButton {{
+                background-color: {primary_color};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 500;
+            }}
+            QCommandLinkButton:hover {{
+                background-color: {primary_color}dd;
+                transform: translateY(-1px);
+            }}
+            QCommandLinkButton:pressed {{
+                background-color: {primary_color}aa;
+            }}
+            """
+            self.setStyleSheet(style)
+            self.current_theme = theme_key
+        except:
+            pass
 
 
 class MenuBtt(Button):
@@ -520,17 +646,6 @@ class ButtonSave(Button):
                 ),
             )
         )
-        css = """
-        background-color:#dbe6c4;
-        border-radius:6px;
-        border:1px solid #b2b8ad;
-        color:#757d6f;
-        font-family:arial;
-        font-size:15px;
-        font-weight:bold;
-        padding:6px 24px;
-        """
-        # self.setStyleSheet(css)
         # self.setIconSize(QSize(20, 20))
         # self.setFocusPolicy(Qt.TabFocus)
         font = QFont()
@@ -841,3 +956,879 @@ class WigglyWidget(QWidget):
             self.update()
         else:
             super(WigglyWidget, self).timerEvent(event)
+
+
+# ===== NOUVEAUX WIDGETS MODERNES =====
+
+class ModernButton(QPushButton):
+    """Bouton moderne avec effets visuels et support des thèmes"""
+    
+    def __init__(self, text="", icon=None, button_type="primary", parent=None):
+        super().__init__(text, parent)
+        
+        self.button_type = button_type  # primary, secondary, success, warning, danger
+        self.current_theme = "light_modern"
+        self._is_hovered = False
+        self._is_pressed = False
+        
+        # Configuration de base
+        self._setup_button()
+        self._setup_animations()
+        
+        if icon:
+            self.setIcon(icon)
+            
+    def _setup_button(self):
+        """Configuration du bouton moderne"""
+        self.setMinimumHeight(40)
+        self.setMinimumWidth(100)
+        self.setCursor(Qt.PointingHandCursor)
+        
+        # Ombre moderne
+        self.shadow = QGraphicsDropShadowEffect()
+        self.shadow.setBlurRadius(10)
+        self.shadow.setColor(QColor(0, 0, 0, 30))
+        self.shadow.setOffset(0, 2)
+        self.setGraphicsEffect(self.shadow)
+        
+    def _setup_animations(self):
+        """Configuration des animations"""
+        self.hover_animation = QPropertyAnimation(self, b"geometry")
+        self.hover_animation.setDuration(200)
+        self.hover_animation.setEasingCurve(QEasingCurve.OutCubic)
+        
+    def apply_theme(self, theme_key: str):
+        """Applique un thème spécifique au bouton"""
+        self.current_theme = theme_key
+        self._update_button_style()
+        
+    def _update_button_style(self):
+        """Met à jour le style selon le type et le thème"""
+        try:
+            from .themes.styles import get_theme_colors
+            colors = get_theme_colors(self.current_theme)
+            
+            if self.button_type == "primary":
+                bg_color = colors.get("primary", "#0d6efd")
+                text_color = "#ffffff"
+            elif self.button_type == "success":
+                bg_color = "#28a745"
+                text_color = "#ffffff"
+            elif self.button_type == "warning":
+                bg_color = "#ffc107"
+                text_color = "#000000"
+            elif self.button_type == "danger":
+                bg_color = "#dc3545"
+                text_color = "#ffffff"
+            else:  # secondary
+                bg_color = "#6c757d"
+                text_color = "#ffffff"
+                
+            style = f"""
+            QPushButton {{
+                background-color: {bg_color};
+                color: {text_color};
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: 600;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {self._lighten_color(bg_color)};
+                transform: translateY(-1px);
+            }}
+            QPushButton:pressed {{
+                background-color: {self._darken_color(bg_color)};
+                transform: translateY(0px);
+            }}
+            """
+            self.setStyleSheet(style)
+        except:
+            pass
+            
+    def _lighten_color(self, color_hex: str) -> str:
+        """Éclaircit une couleur hexadécimale"""
+        try:
+            color = QColor(color_hex)
+            color = color.lighter(110)
+            return color.name()
+        except:
+            return color_hex
+            
+    def _darken_color(self, color_hex: str) -> str:
+        """Assombrit une couleur hexadécimale"""
+        try:
+            color = QColor(color_hex)
+            color = color.darker(110)
+            return color.name()
+        except:
+            return color_hex
+            
+    def enterEvent(self, event):
+        """Animation d'entrée de souris"""
+        self._is_hovered = True
+        self.shadow.setBlurRadius(15)
+        self.shadow.setOffset(0, 4)
+        super().enterEvent(event)
+        
+    def leaveEvent(self, event):
+        """Animation de sortie de souris"""
+        self._is_hovered = False
+        self.shadow.setBlurRadius(10)
+        self.shadow.setOffset(0, 2)
+        super().leaveEvent(event)
+
+
+class ModernCard(QFrame):
+    """Carte moderne avec ombres et coins arrondis"""
+    
+    def __init__(self, parent=None, title="", content_widget=None):
+        super().__init__(parent)
+        
+        self.current_theme = "light_modern"
+        self._setup_card()
+        self._setup_layout(title, content_widget)
+        
+    def _setup_card(self):
+        """Configuration de la carte"""
+        self.setFrameStyle(QFrame.NoFrame)
+        
+        # Ombre moderne
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setOffset(0, 5)
+        self.setGraphicsEffect(shadow)
+        
+        # Style de base
+        self.setStyleSheet("""
+        QFrame {
+            background-color: white;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        """)
+        
+    def _setup_layout(self, title, content_widget):
+        """Configuration du layout de la carte"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+        
+        if title:
+            title_label = QLabel(title)
+            title_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 600;
+                color: #2c3e50;
+                margin-bottom: 8px;
+            }
+            """)
+            layout.addWidget(title_label)
+            
+        if content_widget:
+            layout.addWidget(content_widget)
+            
+    def apply_theme(self, theme_key: str):
+        """Applique un thème à la carte"""
+        try:
+            from .themes.styles import get_theme_colors
+            colors = get_theme_colors(theme_key)
+            
+            bg_color = colors.get("bg", "#ffffff")
+            text_color = "#2c3e50" if "light" in theme_key else "#e2e8f0"
+            
+            style = f"""
+            QFrame {{
+                background-color: {bg_color};
+                border-radius: 12px;
+                padding: 16px;
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            """
+            self.setStyleSheet(style)
+            self.current_theme = theme_key
+        except:
+            pass
+
+
+class ModernLineEdit(QLineEdit):
+    """Champ de saisie moderne avec animations"""
+    
+    def __init__(self, placeholder="", parent=None):
+        super().__init__(parent)
+        
+        self.current_theme = "light_modern"
+        self._setup_line_edit(placeholder)
+        self._setup_animations()
+        
+    def _setup_line_edit(self, placeholder):
+        """Configuration du champ de saisie"""
+        if placeholder:
+            self.setPlaceholderText(placeholder)
+            
+        self.setMinimumHeight(45)
+        
+        # Style de base
+        self.setStyleSheet("""
+        QLineEdit {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            background-color: white;
+        }
+        QLineEdit:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }
+        """)
+        
+    def _setup_animations(self):
+        """Configuration des animations"""
+        self.focus_animation = QPropertyAnimation(self, b"geometry")
+        self.focus_animation.setDuration(200)
+        self.focus_animation.setEasingCurve(QEasingCurve.OutCubic)
+        
+    def apply_theme(self, theme_key: str):
+        """Applique un thème au champ de saisie"""
+        try:
+            from .themes.styles import get_theme_colors
+            colors = get_theme_colors(theme_key)
+            
+            bg_color = colors.get("bg", "#ffffff")
+            primary_color = colors.get("primary", "#0d6efd")
+            
+            style = f"""
+            QLineEdit {{
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 14px;
+                background-color: {bg_color};
+            }}
+            QLineEdit:focus {{
+                border-color: {primary_color};
+                box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+            }}
+            """
+            self.setStyleSheet(style)
+            self.current_theme = theme_key
+        except:
+            pass
+
+
+class ThemeSelector(QComboBox):
+    """Sélecteur de thèmes moderne"""
+    
+    themeSelected = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        self.current_theme = "light_modern"
+        self._setup_selector()
+        self._load_themes()
+        
+    def _setup_selector(self):
+        """Configuration du sélecteur"""
+        self.setMinimumHeight(40)
+        self.setMinimumWidth(200)
+        
+        # Style moderne
+        self.setStyleSheet("""
+        QComboBox {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            background-color: white;
+        }
+        QComboBox:hover {
+            border-color: #0d6efd;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 30px;
+        }
+        QComboBox::down-arrow {
+            width: 12px;
+            height: 8px;
+        }
+        """)
+        
+        # Connexion du signal
+        self.currentTextChanged.connect(self._on_theme_changed)
+        
+    def _load_themes(self):
+        """Charge les thèmes disponibles"""
+        try:
+            from .themes.styles import get_available_themes
+            themes = get_available_themes()
+            
+            for theme_key, description in themes.items():
+                self.addItem(description, theme_key)
+                
+        except ImportError:
+            # Thèmes de base si le module n'est pas disponible
+            basic_themes = {
+                "light_modern": "Moderne Clair",
+                "dark_modern": "Moderne Sombre",
+                "glassmorphism": "Glassmorphism",
+            }
+            for theme_key, description in basic_themes.items():
+                self.addItem(description, theme_key)
+                
+    def _on_theme_changed(self, text):
+        """Gère le changement de thème"""
+        theme_key = self.currentData()
+        if theme_key:
+            self.themeSelected.emit(theme_key)
+            
+    def set_current_theme(self, theme_key: str):
+        """Définit le thème actuel"""
+        for i in range(self.count()):
+            if self.itemData(i) == theme_key:
+                self.setCurrentIndex(i)
+                break
+
+
+# ===== UTILITAIRES MODERNES =====
+
+class WidgetFactory:
+    """Factory pour créer facilement des widgets modernes"""
+    
+    @staticmethod
+    def create_button(text: str, button_type: str = "primary", icon: QIcon = None, parent=None) -> ModernButton:
+        """Crée un bouton moderne"""
+        return ModernButton(text=text, button_type=button_type, icon=icon, parent=parent)
+    
+    @staticmethod
+    def create_card(title: str = "", content_widget: QWidget = None, parent=None) -> ModernCard:
+        """Crée une carte moderne"""
+        return ModernCard(parent=parent, title=title, content_widget=content_widget)
+    
+    @staticmethod
+    def create_input(placeholder: str = "", parent=None) -> ModernLineEdit:
+        """Crée un champ de saisie moderne"""
+        return ModernLineEdit(placeholder=placeholder, parent=parent)
+    
+    @staticmethod
+    def create_theme_selector(parent=None) -> ThemeSelector:
+        """Crée un sélecteur de thèmes"""
+        return ThemeSelector(parent=parent)
+    
+    @staticmethod
+    def create_form_layout(fields: list, parent=None) -> QVBoxLayout:
+        """Crée un layout de formulaire moderne"""
+        layout = QVBoxLayout()
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        for field in fields:
+            if isinstance(field, dict):
+                label_text = field.get('label', '')
+                widget_type = field.get('type', 'input')
+                placeholder = field.get('placeholder', '')
+                
+                if label_text:
+                    label = QLabel(label_text)
+                    label.setStyleSheet("font-weight: 600; margin-bottom: 4px;")
+                    layout.addWidget(label)
+                
+                if widget_type == 'input':
+                    widget = WidgetFactory.create_input(placeholder, parent)
+                elif widget_type == 'button':
+                    widget = WidgetFactory.create_button(
+                        field.get('text', 'Button'),
+                        field.get('button_type', 'primary'),
+                        parent=parent
+                    )
+                else:
+                    continue
+                    
+                layout.addWidget(widget)
+            else:
+                layout.addWidget(field)
+                
+        return layout
+
+
+class ThemeManager:
+    """Gestionnaire de thèmes pour l'application"""
+    
+    def __init__(self, main_window: FMainWindow):
+        self.main_window = main_window
+        self.current_theme = "light_modern"
+        
+    def apply_theme_to_app(self, theme_key: str):
+        """Applique un thème à toute l'application"""
+        try:
+            # Appliquer à la fenêtre principale
+            self.main_window.apply_theme(theme_key)
+            
+            # Appliquer à tous les widgets avec support des thèmes
+            app = QApplication.instance()
+            if app:
+                for widget in app.allWidgets():
+                    if hasattr(widget, 'apply_theme'):
+                        widget.apply_theme(theme_key)
+                        
+            self.current_theme = theme_key
+            print(f"Thème {theme_key} appliqué à toute l'application")
+            
+        except Exception as e:
+            print(f"Erreur lors de l'application du thème: {e}")
+    
+    def get_current_theme(self) -> str:
+        """Retourne le thème actuel"""
+        return self.current_theme
+    
+    def get_available_themes(self) -> dict:
+        """Retourne les thèmes disponibles"""
+        try:
+            from .themes.styles import get_available_themes
+            return get_available_themes()
+        except ImportError:
+            return {
+                "light_modern": "Moderne Clair",
+                "dark_modern": "Moderne Sombre",
+                "glassmorphism": "Glassmorphism"
+            }
+
+
+# ===== GESTIONNAIRE DE THÈMES DYNAMIQUE =====
+
+def get_dynamic_themes_list() -> dict:
+    """
+    Retourne la liste complète et dynamique de tous les thèmes disponibles
+    
+    Returns:
+        dict: Dictionnaire {theme_key: description_française}
+    """
+    try:
+        # Essayer d'importer depuis le système de thèmes moderne
+        from .themes.styles import get_available_themes
+        themes = get_available_themes()
+        
+        # Vérifier que nous avons bien tous nos thèmes modernes
+        if len(themes) >= 10:  # Nous avons 10 thèmes modernes
+            return themes
+        else:
+            # Si ce n'est pas complet, retourner la liste complète
+            return get_complete_themes_list()
+            
+    except ImportError:
+        # Fallback vers la liste complète si le module n'est pas disponible
+        return get_complete_themes_list()
+    except Exception as e:
+        print(f"Erreur lors de la récupération des thèmes: {e}")
+        return get_complete_themes_list()
+
+def get_complete_themes_list() -> dict:
+    """
+    Liste complète des 10 thèmes ultra-modernes disponibles
+    
+    Returns:
+        dict: Dictionnaire complet des thèmes avec descriptions françaises
+    """
+    return {
+        # Thèmes de base modernes
+        "light_modern": "🌟 Moderne Clair",
+        "dark_modern": "🌙 Moderne Sombre",
+        
+        # Thèmes colorés avancés
+        "professional_blue": "💼 Professionnel Bleu",
+        "nature_green": "🌿 Nature Verte",
+        "warm_orange": "🔥 Chaleureux Orange",
+        "creative_purple": "🎨 Créatif Violet",
+        
+        # Thèmes ultra-modernes révolutionnaires
+        "glassmorphism": "💎 Glassmorphism",
+        "neumorphism": "🎯 Neumorphism",
+        "cyberpunk_neon": "⚡ Cyberpunk Néon",
+        
+        # Thème par défaut (pour compatibilité)
+        "default": "📋 Défaut Système"
+    }
+
+def get_theme_categories() -> dict:
+    """
+    Retourne les thèmes organisés par catégories
+    
+    Returns:
+        dict: Thèmes organisés par catégories
+    """
+    return {
+        "Modernes": {
+            "light_modern": "🌟 Moderne Clair",
+            "dark_modern": "🌙 Moderne Sombre"
+        },
+        "Professionnels": {
+            "professional_blue": "💼 Professionnel Bleu",
+            "nature_green": "🌿 Nature Verte"
+        },
+        "Créatifs": {
+            "warm_orange": "🔥 Chaleureux Orange",
+            "creative_purple": "🎨 Créatif Violet"
+        },
+        "Révolutionnaires": {
+            "glassmorphism": "💎 Glassmorphism",
+            "neumorphism": "🎯 Neumorphism",
+            "cyberpunk_neon": "⚡ Cyberpunk Néon"
+        },
+        "Système": {
+            "default": "📋 Défaut Système"
+        }
+    }
+
+def get_theme_info(theme_key: str) -> dict:
+    """
+    Retourne les informations détaillées d'un thème
+    
+    Args:
+        theme_key (str): Clé du thème
+        
+    Returns:
+        dict: Informations détaillées du thème
+    """
+    themes_info = {
+        "light_modern": {
+            "name": "Moderne Clair",
+            "description": "Interface épurée avec tons clairs et contrastes doux",
+            "icon": "🌟",
+            "category": "Moderne",
+            "primary_color": "#0d6efd",
+            "background": "#ffffff"
+        },
+        "dark_modern": {
+            "name": "Moderne Sombre",
+            "description": "Interface sombre élégante pour réduire la fatigue oculaire",
+            "icon": "🌙",
+            "category": "Moderne",
+            "primary_color": "#0d6efd",
+            "background": "#1a1a1a"
+        },
+        "professional_blue": {
+            "name": "Professionnel Bleu",
+            "description": "Thème professionnel avec dominante bleue corporative",
+            "icon": "💼",
+            "category": "Professionnel",
+            "primary_color": "#1e40af",
+            "background": "#f8fafc"
+        },
+        "nature_green": {
+            "name": "Nature Verte",
+            "description": "Inspiration naturelle avec verts apaisants",
+            "icon": "🌿",
+            "category": "Naturel", 
+            "primary_color": "#059669",
+            "background": "#f0fdf4"
+        },
+        "warm_orange": {
+            "name": "Chaleureux Orange",
+            "description": "Énergie chaleureuse avec tons orange dynamiques",
+            "icon": "🔥",
+            "category": "Créatif",
+            "primary_color": "#ea580c",
+            "background": "#fff7ed"
+        },
+        "creative_purple": {
+            "name": "Créatif Violet",
+            "description": "Inspiration créative avec violets sophistiqués",
+            "icon": "🎨",
+            "category": "Créatif",
+            "primary_color": "#7c3aed",
+            "background": "#faf5ff"
+        },
+        "glassmorphism": {
+            "name": "Glassmorphism",
+            "description": "Effet de verre moderne avec transparences et flou",
+            "icon": "💎",
+            "category": "Révolutionnaire",
+            "primary_color": "#667eea",
+            "background": "rgba(255,255,255,0.1)"
+        },
+        "neumorphism": {
+            "name": "Neumorphism",
+            "description": "Design en relief doux avec ombres intégrées",
+            "icon": "🎯",
+            "category": "Révolutionnaire",
+            "primary_color": "#9ca3af",
+            "background": "#e0e5ec"
+        },
+        "cyberpunk_neon": {
+            "name": "Cyberpunk Néon",
+            "description": "Futurisme radical avec néons électriques",
+            "icon": "⚡",
+            "category": "Révolutionnaire",
+            "primary_color": "#00ffff",
+            "background": "#0a0a0a"
+        },
+        "default": {
+            "name": "Défaut Système",
+            "description": "Thème par défaut du système d'exploitation",
+            "icon": "📋",
+            "category": "Système",
+            "primary_color": "#6c757d",
+            "background": "#ffffff"
+        }
+    }
+    
+    return themes_info.get(theme_key, {
+        "name": "Thème Inconnu",
+        "description": "Thème non défini",
+        "icon": "❓",
+        "category": "Inconnu",
+        "primary_color": "#6c757d",
+        "background": "#ffffff"
+    })
+
+def create_theme_menu_data() -> list:
+    """
+    Crée les données structurées pour les menus de thèmes
+    
+    Returns:
+        list: Liste des thèmes avec métadonnées pour les menus
+    """
+    themes_list = get_dynamic_themes_list()
+    menu_data = []
+    
+    for theme_key, theme_name in themes_list.items():
+        info = get_theme_info(theme_key)
+        menu_data.append({
+            'key': theme_key,
+            'name': theme_name,
+            'description': info.get('description', ''),
+            'icon': info.get('icon', '🎨'),
+            'category': info.get('category', 'Autre'),
+            'primary_color': info.get('primary_color', '#6c757d')
+        })
+    
+    # Trier par catégorie puis par nom
+    menu_data.sort(key=lambda x: (x['category'], x['name']))
+    return menu_data
+
+def get_theme_by_category() -> dict:
+    """
+    Retourne les thèmes organisés par catégories pour l'affichage
+    
+    Returns:
+        dict: Thèmes organisés par catégories
+    """
+    menu_data = create_theme_menu_data()
+    categories = {}
+    
+    for theme in menu_data:
+        category = theme['category']
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(theme)
+    
+    return categories
+
+# ===== WIDGET SÉLECTEUR DE THÈMES AVANCÉ =====
+
+class AdvancedThemeSelector(QWidget):
+    """Sélecteur de thèmes avancé avec catégories et prévisualisations"""
+    
+    themeSelected = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        self.current_theme = "light_modern"
+        self.setup_ui()
+        self.load_themes()
+        
+    def setup_ui(self):
+        """Configuration de l'interface"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        
+        # Titre
+        title = QLabel("🎨 Sélecteur de Thèmes")
+        title.setStyleSheet("""
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px;
+            text-align: center;
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        
+        # Recherche
+        self.search_input = ModernLineEdit("Rechercher un thème...")
+        self.search_input.textChanged.connect(self.filter_themes)
+        layout.addWidget(self.search_input)
+        
+        # Liste des thèmes
+        self.themes_list = QVBoxLayout()
+        layout.addLayout(self.themes_list)
+        
+    def load_themes(self):
+        """Charge les thèmes par catégories"""
+        categories = get_theme_by_category()
+        
+        for category_name, themes in categories.items():
+            # Titre de catégorie
+            category_label = QLabel(f"📁 {category_name}")
+            category_label.setStyleSheet("""
+                font-weight: 600;
+                font-size: 14px;
+                padding: 8px 4px;
+                border-bottom: 2px solid #e2e8f0;
+                margin-top: 8px;
+            """)
+            self.themes_list.addWidget(category_label)
+            
+            # Thèmes de la catégorie
+            for theme in themes:
+                theme_widget = self.create_theme_widget(theme)
+                self.themes_list.addWidget(theme_widget)
+                
+    def create_theme_widget(self, theme_data: dict) -> QWidget:
+        """Crée un widget pour un thème"""
+        widget = QFrame()
+        widget.setFrameStyle(QFrame.StyledPanel)
+        widget.setCursor(Qt.PointingHandCursor)
+        
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(12, 8, 12, 8)
+        
+        # Icône et nom
+        icon_label = QLabel(theme_data['icon'])
+        icon_label.setStyleSheet("font-size: 20px;")
+        layout.addWidget(icon_label)
+        
+        name_label = QLabel(theme_data['name'])
+        name_label.setStyleSheet("font-weight: 500;")
+        layout.addWidget(name_label)
+        
+        # Couleur de prévisualisation
+        color_preview = QLabel()
+        color_preview.setFixedSize(20, 20)
+        color_preview.setStyleSheet(f"""
+            background-color: {theme_data['primary_color']};
+            border-radius: 10px;
+            border: 1px solid #ccc;
+        """)
+        layout.addWidget(color_preview)
+        
+        layout.addStretch()
+        
+        # Événement de clic
+        def on_click():
+            self.themeSelected.emit(theme_data['key'])
+            
+        widget.mousePressEvent = lambda e: on_click()
+        
+        # Style hover
+        widget.setStyleSheet("""
+            QFrame:hover {
+                background-color: #f0f8ff;
+                border-left: 3px solid #0d6efd;
+            }
+        """)
+        
+        return widget
+        
+    def filter_themes(self, text: str):
+        """Filtre les thèmes selon le texte de recherche"""
+        # Implémentation simple du filtrage
+        text = text.lower()
+        
+        for i in range(self.themes_list.count()):
+            item = self.themes_list.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if isinstance(widget, QLabel):  # Titre de catégorie
+                    widget.setVisible(True)
+                elif hasattr(widget, 'layout'):  # Widget de thème
+                    # Vérifier si le texte correspond au nom du thème
+                    should_show = not text or text in widget.findChild(QLabel).text().lower()
+                    widget.setVisible(should_show)
+
+
+# ===== EXEMPLES D'UTILISATION =====
+
+def create_themes_showcase_widget(parent=None) -> QWidget:
+    """Crée un widget de présentation des thèmes disponibles"""
+    showcase = FWidget(parent)
+    layout = QVBoxLayout(showcase)
+    layout.setSpacing(20)
+    layout.setContentsMargins(30, 30, 30, 30)
+    
+    # Titre principal
+    title = QLabel("🎨 Galerie des Thèmes Ultra-Modernes")
+    title.setStyleSheet("""
+        font-size: 28px;
+        font-weight: 700;
+        text-align: center;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+    """)
+    title.setAlignment(Qt.AlignCenter)
+    layout.addWidget(title)
+    
+    # Statistiques
+    stats_card = ModernCard(title="📊 Statistiques des Thèmes")
+    stats_layout = QVBoxLayout()
+    
+    themes_count = len(get_dynamic_themes_list())
+    categories_count = len(get_theme_categories())
+    
+    stats_text = f"""
+    <div style="text-align: center; padding: 10px;">
+        <h3>🎯 Système Ultra-Moderne Activé</h3>
+        <p><strong>{themes_count}</strong> thèmes disponibles</p>
+        <p><strong>{categories_count}</strong> catégories</p>
+        <p><strong>3</strong> thèmes révolutionnaires</p>
+    </div>
+    """
+    
+    stats_label = QLabel(stats_text)
+    stats_label.setAlignment(Qt.AlignCenter)
+    stats_layout.addWidget(stats_label)
+    
+    stats_widget = QWidget()
+    stats_widget.setLayout(stats_layout)
+    stats_card.layout().addWidget(stats_widget)
+    layout.addWidget(stats_card)
+    
+    # Sélecteur avancé
+    selector_card = ModernCard(title="🎭 Sélecteur Avancé")
+    advanced_selector = AdvancedThemeSelector()
+    selector_card.layout().addWidget(advanced_selector)
+    layout.addWidget(selector_card)
+    
+    # Informations sur le thème actuel
+    current_theme_card = ModernCard(title="ℹ️ Thème Actuel")
+    current_info = QLabel("Sélectionnez un thème pour voir ses détails")
+    current_info.setWordWrap(True)
+    current_theme_card.layout().addWidget(current_info)
+    layout.addWidget(current_theme_card)
+    
+    # Connecter les événements
+    def on_theme_selected(theme_key):
+        info = get_theme_info(theme_key)
+        info_text = f"""
+        <h3>{info['icon']} {info['name']}</h3>
+        <p><strong>Catégorie:</strong> {info['category']}</p>
+        <p><strong>Description:</strong> {info['description']}</p>
+        <p><strong>Couleur primaire:</strong> <span style="color: {info['primary_color']};">●</span> {info['primary_color']}</p>
+        """
+        current_info.setText(info_text)
+        
+        # Appliquer le thème au showcase
+        showcase.apply_theme(theme_key)
+    
+    advanced_selector.themeSelected.connect(on_theme_selected)
+    
+    return showcase

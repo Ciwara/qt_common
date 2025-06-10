@@ -13,7 +13,7 @@ from .clean_db import DBCleanerWidget
 from .common import FWidget
 from .license_view import LicenseViewWidget
 from ..cstatic import CConstants, logger
-
+from .common import get_complete_themes_list
 
 
 class FMenuBar(QMenuBar, FWidget):
@@ -79,6 +79,8 @@ class FMenuBar(QMenuBar, FWidget):
                     "light_modern": "Moderne Clair", 
                     "dark_modern": "Moderne Sombre"
                 }
+
+            themes = get_complete_themes_list()
             
             # Récupération du thème actuel avec gestion d'erreur
             try:
@@ -90,12 +92,12 @@ class FMenuBar(QMenuBar, FWidget):
                 current_theme = "default"   # Thème par défaut
             
             # Construction du menu des thèmes
-            for theme_key, theme_display_name in available_themes.items():
+            for theme_key, theme_display_name in themes.items():
                 icon = ""
                 if theme_key == current_theme:
                     icon = "accept"
                     
-                el_menu = QAction(
+                el_menu = QAction(  
                     QIcon("{}{}.png".format(CConstants.img_cmedia, icon)),
                     theme_display_name,  # Utiliser le nom d'affichage au lieu du code
                     self,

@@ -419,30 +419,59 @@ class Settings(BaseModel):
     toolbar = peewee.BooleanField(default=True)
     toolbar_position = peewee.CharField(choices=POSITION, default=LEFT)
     url = peewee.CharField(default="http://file-repo.ml")
-    theme = peewee.CharField(default="light_modern")
+    theme = peewee.CharField(default="default")
     devise = peewee.CharField(choices=DEVISE, default=XOF)
 
     @classmethod
     def init_settings(cls):
         """Initialise les paramètres par défaut si nécessaire"""
-        settings = cls.filter(id=1).first()
-        if settings is None:
-            logger.debug("Création des paramètres par défaut")
-            settings = cls(
-                id=1,
-                slug=cls.DEFAULT,
-                is_login=True,
-                after_cam=1,
-                toolbar=True,
-                toolbar_position=cls.LEFT,
-                url="http://file-repo.ml",
-                theme="default",
-                devise=cls.XOF
-            )
-            settings.save()
-            logger.debug("Paramètres par défaut créés avec succès")
-        else:
+        try:
+            settings = cls.get(id=1)
             logger.debug("Paramètres existants trouvés")
+        except cls.DoesNotExist:
+            logger.debug("Création des paramètres par défaut")
+            
+            # Utiliser une insertion SQL directe pour contourner les problèmes de Peewee
+            try:
+                from . import dbh
+                query = """
+                INSERT OR REPLACE INTO settings 
+                (id, is_syncro, last_update_date, slug, is_login, after_cam, toolbar, toolbar_position, url, theme, devise)
+                VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                dbh.execute_sql(query, [
+                    cls.DEFAULT,      # slug
+                    True,             # is_login
+                    1,                # after_cam
+                    True,             # toolbar
+                    cls.LEFT,         # toolbar_position
+                    "http://file-repo.ml",  # url
+                    "default",        # theme
+                    cls.XOF           # devise
+                ])
+                logger.debug("Paramètres créés avec succès via SQL")
+                
+                # Récupérer l'enregistrement créé
+                settings = cls.get(id=1)
+                logger.debug(f"Vérification création réussie - thème: {settings.theme}")
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de la création SQL: {e}")
+                # Fallback vers la méthode classique
+                settings = cls(
+                    id=1,
+                    slug=cls.DEFAULT,
+                    is_login=True,
+                    after_cam=1,
+                    toolbar=True,
+                    toolbar_position=cls.LEFT,
+                    url="http://file-repo.ml",
+                    theme="default",
+                    devise=cls.XOF
+                )
+                settings.save()
+                logger.debug("Paramètres créés avec succès via fallback")
+                
         return settings
 
     def data(self):

@@ -147,37 +147,57 @@ def theme_exists(theme_key):
         return False
 
 def get_current_theme():
-    """Obtient le thème actuellement configuré"""
+    """Obtient le thème actuellement configuré avec persistance améliorée"""
     try:
-        settings = Settings.get_or_create(id=1)[0]
+        # Utiliser init_settings pour assurer l'existence de l'enregistrement
+        settings = Settings.init_settings()
         current_theme = settings.theme
         
         # Vérifier si le thème existe, sinon utiliser le défaut
-        if not theme_exists(current_theme):
-            logger.warning(f"Thème '{current_theme}' non trouvé, utilisation du thème par défaut")
+        if not current_theme or not theme_exists(current_theme):
+            logger.warning(f"Thème '{current_theme}' invalide, utilisation du thème par défaut")
             current_theme = ThemeConfig.get_default_theme()
             settings.theme = current_theme
             settings.save()
+            logger.info(f"Thème corrigé vers: {current_theme}")
+        else:
+            logger.debug(f"Thème récupéré depuis la base: {current_theme}")
             
         return current_theme
     except Exception as e:
         logger.error(f"Erreur lors de la récupération du thème actuel: {e}")
-        return ThemeConfig.get_default_theme()
+        fallback_theme = ThemeConfig.get_default_theme()
+        logger.info(f"Utilisation du thème de fallback: {fallback_theme}")
+        return fallback_theme
 
 def set_current_theme(theme_key):
-    """Définit le thème actuel"""
+    """Définit le thème actuel avec sauvegarde sécurisée"""
     try:
+        if not theme_key:
+            logger.error("Clé de thème vide fournie")
+            return False
+            
         if not theme_exists(theme_key):
             logger.error(f"Impossible de définir le thème '{theme_key}': thème inexistant")
             return False
             
-        settings = Settings.get_or_create(id=1)[0]
+        # Utiliser init_settings pour assurer l'existence de l'enregistrement
+        settings = Settings.init_settings()
+        
+        # Sauvegarder l'ancien thème pour debug
+        old_theme = settings.theme
+        
+        # Définir le nouveau thème
         settings.theme = theme_key
         settings.save()
-        logger.info(f"Thème défini sur: {theme_key}")
+        
+        logger.info(f"Thème sauvegardé: {old_theme} → {theme_key}")
         return True
+            
     except Exception as e:
         logger.error(f"Erreur lors de la définition du thème: {e}")
+        import traceback
+        logger.debug(f"Trace de l'erreur: {traceback.format_exc()}")
         return False
 
 def get_theme_info(theme_key=None):
