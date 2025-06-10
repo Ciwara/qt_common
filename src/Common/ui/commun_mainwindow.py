@@ -5,7 +5,20 @@
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMainWindow, QToolBar
+from PyQt5.QtWidgets import (
+    QMainWindow, 
+    QToolBar, 
+    QVBoxLayout, 
+    QHBoxLayout, 
+    QLabel, 
+    QPushButton, 
+    QLineEdit, 
+    QCheckBox, 
+    QTextEdit,
+    QGroupBox,
+    QFormLayout,
+    QMessageBox
+)
 
 from ..cstatic import CConstants, logger
 from .cmenubar import FMenuBar
@@ -22,8 +35,160 @@ class TestViewWidget(FWidget):
         super(TestViewWidget, self).__init__(parent=parent, *args, **kwargs)
         self.parent = parent
         self.parentWidget().setWindowTitle(" Test")
-        self.title = "Movements"
+        self.title = "Common page"
         logger.debug("Initialisation de TestViewWidget")
+
+
+class ExamplePageWidget(FWidget):
+    """Page exemple avec différents widgets de démonstration"""
+
+    def __init__(self, parent=0, *args, **kwargs):
+        super(ExamplePageWidget, self).__init__(parent=parent, *args, **kwargs)
+        self.parent = parent
+        self.parentWidget().setWindowTitle("Page Exemple")
+        self.title = "Page Exemple"
+        
+        self.setup_ui()
+        logger.debug("Initialisation de ExamplePageWidget")
+
+    def setup_ui(self):
+        """Configuration de l'interface utilisateur"""
+        main_layout = QVBoxLayout()
+        
+        # Titre principal
+        title_label = QLabel("Page Exemple - Démonstration des Widgets")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
+        main_layout.addWidget(title_label)
+        
+        # Groupe de widgets de base
+        self.create_basic_widgets_group(main_layout)
+        
+        # Groupe de formulaire
+        self.create_form_group(main_layout)
+        
+        # Groupe de boutons d'action
+        self.create_action_buttons_group(main_layout)
+        
+        self.setLayout(main_layout)
+
+    def create_basic_widgets_group(self, parent_layout):
+        """Créer le groupe des widgets de base"""
+        group_box = QGroupBox("Widgets de Base")
+        layout = QVBoxLayout()
+        
+        # Checkbox
+        self.checkbox = QCheckBox("Option activée")
+        self.checkbox.setChecked(True)
+        layout.addWidget(self.checkbox)
+        
+        # Champ de texte simple
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(QLabel("Texte simple:"))
+        self.line_edit = QLineEdit()
+        self.line_edit.setPlaceholderText("Saisissez du texte ici...")
+        h_layout.addWidget(self.line_edit)
+        layout.addLayout(h_layout)
+        
+        group_box.setLayout(layout)
+        parent_layout.addWidget(group_box)
+
+    def create_form_group(self, parent_layout):
+        """Créer le groupe de formulaire"""
+        group_box = QGroupBox("Formulaire Exemple")
+        form_layout = QFormLayout()
+        
+        # Champ nom
+        self.name_field = QLineEdit()
+        form_layout.addRow("Nom:", self.name_field)
+        
+        # Champ email
+        self.email_field = QLineEdit()
+        self.email_field.setPlaceholderText("exemple@email.com")
+        form_layout.addRow("Email:", self.email_field)
+        
+        # Zone de texte
+        self.text_area = QTextEdit()
+        self.text_area.setMaximumHeight(100)
+        self.text_area.setPlaceholderText("Commentaires ou notes...")
+        form_layout.addRow("Commentaires:", self.text_area)
+        
+        group_box.setLayout(form_layout)
+        parent_layout.addWidget(group_box)
+
+    def create_action_buttons_group(self, parent_layout):
+        """Créer le groupe de boutons d'action"""
+        group_box = QGroupBox("Actions")
+        layout = QHBoxLayout()
+        
+        # Bouton de validation
+        validate_btn = QPushButton("Valider")
+        validate_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        validate_btn.clicked.connect(self.on_validate)
+        layout.addWidget(validate_btn)
+        
+        # Bouton d'effacement
+        clear_btn = QPushButton("Effacer")
+        clear_btn.setStyleSheet("background-color: #f44336; color: white;")
+        clear_btn.clicked.connect(self.on_clear)
+        layout.addWidget(clear_btn)
+        
+        # Bouton d'information
+        info_btn = QPushButton("Info")
+        info_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        info_btn.clicked.connect(self.on_info)
+        layout.addWidget(info_btn)
+        
+        group_box.setLayout(layout)
+        parent_layout.addWidget(group_box)
+
+    def on_validate(self):
+        """Action de validation"""
+        name = self.name_field.text()
+        email = self.email_field.text()
+        comments = self.text_area.toPlainText()
+        is_checked = self.checkbox.isChecked()
+        
+        if not name:
+            QMessageBox.warning(self, "Attention", "Le champ nom est requis!")
+            return
+        
+        message = f"Données validées:\n\nNom: {name}\nEmail: {email}\nOption activée: {'Oui' if is_checked else 'Non'}"
+        if comments:
+            message += f"\nCommentaires: {comments}"
+        
+        QMessageBox.information(self, "Validation", message)
+        logger.info(f"Données validées pour {name}")
+
+    def on_clear(self):
+        """Action d'effacement"""
+        self.name_field.clear()
+        self.email_field.clear()
+        self.text_area.clear()
+        self.line_edit.clear()
+        self.checkbox.setChecked(False)
+        
+        QMessageBox.information(self, "Effacement", "Tous les champs ont été effacés!")
+        logger.info("Champs effacés dans ExamplePageWidget")
+
+    def on_info(self):
+        """Action d'information"""
+        info_text = """
+        Cette page exemple démontre l'utilisation de différents widgets PyQt5:
+        
+        • QGroupBox pour organiser les widgets
+        • QLabel pour afficher du texte
+        • QLineEdit pour la saisie de texte simple
+        • QTextEdit pour la saisie de texte multiligne
+        • QCheckBox pour les options booléennes
+        • QPushButton pour les actions
+        • QFormLayout pour les formulaires
+        • QMessageBox pour les dialogues
+        
+        Développé avec PyQt5 et Python.
+        """
+        
+        QMessageBox.about(self, "À propos de cette page", info_text)
+        logger.info("Information affichée dans ExamplePageWidget")
 
 
 class CommonMainWindow(FMainWindow):
@@ -71,9 +236,10 @@ class CommonMainWindow(FMainWindow):
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
         logger.debug("Barre d'outils initialisée")
 
-        self.page = TestViewWidget
+        # Changer cette ligne pour utiliser ExamplePageWidget au lieu de TestViewWidget
+        self.page = ExamplePageWidget  # ou TestViewWidget pour la page de test basique
         self.change_context(self.page)
-        logger.debug("Contexte initial changé vers TestViewWidget")
+        logger.debug("Contexte initial changé vers ExamplePageWidget")
         
     def closeEvent(self, event):
         """Override closeEvent pour nettoyer les threads avant fermeture"""
