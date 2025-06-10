@@ -3,7 +3,6 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
-from datetime import datetime
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QAction, QMenuBar, QMessageBox
 
@@ -51,12 +50,24 @@ class FMenuBar(QMenuBar, FWidget):
         import_db.triggered.connect(self.goto_import_backup)
         backup.addAction(import_db)
 
-        ow = Owner.select().where(Owner.islog == True)
-        if ow.exists():
-            if ow.get().group == Owner.ADMIN and "del_all" not in exclude_mn:
-                backup.addAction(
-                    "Suppression de tout les enregistrements", self.goto_clean_db
-                )
+        try:
+            ow = Owner.select().where(Owner.islog)
+            logger.debug(f"Recherche des propriétaires connectés: {ow.exists()}")
+            
+            if ow.exists():
+                owner = ow.get()
+                logger.debug(f"Propriétaire trouvé - groupe: {owner.group}, Admin requis: {Owner.ADMIN}")
+                
+                if owner.group == Owner.ADMIN and "del_all" not in exclude_mn:
+                    backup.addAction(
+                        "Suppression de tout les enregistrements", self.goto_clean_db
+                    )
+                    logger.debug("Menu de suppression ajouté pour l'administrateur")
+            else:
+                logger.debug("Aucun propriétaire connecté trouvé")
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification des droits administrateur: {e}")
 
         # Comptes utilisateur
         admin = self.file_.addMenu("&Outils")
@@ -65,22 +76,7 @@ class FMenuBar(QMenuBar, FWidget):
 
         if "theme" not in exclude_mn:
             _theme = preference.addMenu("Theme")
-            
-            # Récupération des thèmes disponibles depuis le nouveau système centralisé
-            try:
-                from .themes import get_available_themes
-                available_themes = get_available_themes()
-                logger.info(f"Thèmes disponibles: {available_themes}")
-            except Exception as e:
-                logger.warning(f"Erreur lors de la récupération des thèmes: {e}")
-                # Fallback vers les thèmes de base
-                available_themes = {
-                    "default": "Défaut",
-                    "light_modern": "Moderne Clair", 
-                    "dark_modern": "Moderne Sombre"
-                }
 
-            themes = get_complete_themes_list()
             
             # Récupération du thème actuel avec gestion d'erreur
             try:
@@ -90,7 +86,9 @@ class FMenuBar(QMenuBar, FWidget):
             except Exception as e:
                 logger.warning(f"Erreur lors de la récupération des paramètres: {e}")
                 current_theme = "default"   # Thème par défaut
+                raise e
             
+            themes = get_complete_themes_list()
             # Construction du menu des thèmes
             for theme_key, theme_display_name in themes.items():
                 icon = ""
@@ -109,17 +107,29 @@ class FMenuBar(QMenuBar, FWidget):
                 _theme.addAction(el_menu)  # Pas de séparateur entre chaque thème
                 
             _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
-
-        if ow.exists():
-            if ow.get().group == Owner.ADMIN:
-                admin_ = QAction(
-                    QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}settings.png")),
-                    "Gestion Administration",
-                    self,
-                )
-                admin_.setShortcut("Ctrl+G")
-                admin_.triggered.connect(self.goto_admin)
-                preference.addAction(admin_)
+        # Gestion du menu administrateur
+        try:
+            logger.debug(f"Vérification des droits admin: {ow.exists()}")
+            if ow.exists():
+                owner = ow.get()
+                logger.debug(f"Utilisateur connecté - groupe: {owner.group}, Admin requis: {Owner.ADMIN}")
+                
+                if owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
+                    admin_ = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}settings.png")),
+                        "Gestion Administration",
+                        self,
+                    )
+                    admin_.setShortcut("Ctrl+G")
+                    admin_.triggered.connect(self.goto_admin)
+                    preference.addAction(admin_)
+                    logger.debug("Menu d'administration ajouté avec succès")
+                else:
+                    logger.debug("Accès administrateur refusé - droits insuffisants")
+            else:
+                logger.debug("Aucun utilisateur connecté - menu admin non ajouté")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'ajout du menu administrateur: {e}")
         # logout
         lock = QAction(QIcon(f"{CConstants.img_cmedia}login.png"), "Verrouiller", self)
         lock.setShortcut("Ctrl+V")

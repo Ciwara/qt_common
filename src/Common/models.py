@@ -180,7 +180,7 @@ class Owner(BaseModel):
 
     USER = "Utilisateur"
     ADMIN = "Administrateur"
-    ROOT = "superuser"
+    SUPERUSER = "superuser"
 
     username = peewee.CharField(max_length=30, unique=True, verbose_name="Identifiant")
     group = peewee.CharField(default=USER)
@@ -223,6 +223,16 @@ class Owner(BaseModel):
 
     def is_login(self):
         return Owner.select().get(islog=True)
+    
+    @classmethod
+    def get_non_superusers(cls):
+        """Retourne tous les propriétaires sauf les superusers"""
+        return cls.select().where(cls.group != cls.SUPERUSER)
+    
+    @classmethod
+    def get_active_non_superusers(cls):
+        """Retourne tous les propriétaires actifs sauf les superusers"""
+        return cls.select().where(cls.isactive, cls.group != cls.SUPERUSER)
 
 
 class Organization(BaseModel):
@@ -433,7 +443,11 @@ class Settings(BaseModel):
             
             # Utiliser une insertion SQL directe pour contourner les problèmes de Peewee
             try:
-                from . import dbh
+                global dbh  # Utiliser la variable globale directement
+                if dbh is None:
+                    logger.error("dbh n'est pas initialisé")
+                    raise Exception("Base de données non initialisée")
+                    
                 query = """
                 INSERT OR REPLACE INTO settings 
                 (id, is_syncro, last_update_date, slug, is_login, after_cam, toolbar, toolbar_position, url, theme, devise)
@@ -507,6 +521,92 @@ class Settings(BaseModel):
         
         return super(Settings, self).save(*args, **filtered_kwargs)
 
+def init_default_superuser():
+    """Initialise un superuser par défaut si nécessaire"""
+    try:
+        # Vérifier si un superuser existe déjà
+        superuser_exists = Owner.select().where(Owner.group == Owner.SUPERUSER).exists()
+        
+        if not superuser_exists:
+            logger.info("Création du superuser par défaut")
+            
+            # Créer le superuser par défaut
+            superuser = Owner()
+            superuser.username = "superuser"
+            superuser.group = Owner.SUPERUSER
+            superuser.password = superuser.crypt_password("superuser123")  # Mot de passe par défaut
+            superuser.phone = "00000000"
+            superuser.isactive = True
+            superuser.islog = False
+            superuser.login_count = 0
+            superuser.save()
+            
+            logger.info("✅ Superuser 'superuser' créé avec succès (mot de passe: superuser123)")
+            return True
+        else:
+            logger.debug("Un superuser existe déjà")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Erreur lors de la création du superuser par défaut: {e}")
+        return False
+
+
+def list_admins():
+    """Liste tous les administrateurs du système"""
+    try:
+        admins = Owner.select().where(Owner.group == Owner.ADMIN)
+        return list(admins)
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des administrateurs: {e}")
+        return []
+
+def list_owners_non_superuser():
+    """Liste tous les propriétaires sauf les superusers"""
+    try:
+        owners = Owner.select().where(Owner.group != Owner.SUPERUSER)
+        return list(owners)
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des propriétaires: {e}")
+        return []
+
+def list_active_owners_non_superuser():
+    """Liste tous les propriétaires actifs sauf les superusers"""
+    try:
+        owners = Owner.select().where(
+            Owner.isactive == True,
+            Owner.group != Owner.SUPERUSER
+        )
+        return list(owners)
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des propriétaires actifs: {e}")
+        return []
+
+def list_owners_by_group(exclude_superuser=True):
+    """Liste les propriétaires groupés par type, en excluant optionnellement les superusers"""
+    try:
+        result = {
+            Owner.USER: [],
+            Owner.ADMIN: [],
+        }
+        
+        # Construire la requête avec ou sans superuser
+        query = Owner.select()
+        if exclude_superuser:
+            query = query.where(Owner.group != Owner.SUPERUSER)
+        else:
+            result[Owner.SUPERUSER] = []
+        
+        # Grouper par type
+        for owner in query:
+            if owner.group in result:
+                result[owner.group].append(owner)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Erreur lors du groupement des propriétaires: {e}")
+        return {}
+
 def init_database():
     """Initialise la base de données et crée les tables si nécessaire"""
     global dbh, router
@@ -559,6 +659,9 @@ def init_database():
         # Initialisation des paramètres par défaut
         Settings.init_settings()
         logger.info("Paramètres par défaut initialisés")
+        
+        # Initialisation de l'administrateur et du superuser par défaut
+        init_default_superuser()
         
         return True
     except Exception as e:

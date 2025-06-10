@@ -354,10 +354,10 @@ class OwnerTableWidget(QListWidget):
         self.refresh_()
 
     def refresh_(self):
-        """Rafraichir la liste des groupes"""
+        """Rafraichir la liste des groupes (sans les superusers)"""
         self.clear()
         self.addItem(OwnerQListWidgetItem(-1))
-        for owner in Owner.select():
+        for owner in Owner.get_non_superusers():
             self.addItem(OwnerQListWidgetItem(owner))
 
     def handleClicked(self):

@@ -2,7 +2,7 @@ from .cstatic import logger
 
 try:
     # Import des modules disponibles
-    from .models import init_database
+    from .models import init_database, dbh,  init_default_superuser, list_admins
     from .updater import UpdaterInit
 
     logger.info("Initialisation de l'application")
@@ -16,6 +16,9 @@ try:
     # L'updater sera initialisé manuellement par les fenêtres qui en ont besoin
     # pour éviter les problèmes de threads non fermés
     logger.info("Modules Common chargés avec succès")
+    
+    # Export des objets principaux
+    __all__ = ['logger', 'init_database', 'dbh', 'init_default_superuser', 'list_admins', 'UpdaterInit']
     
 except ImportError as e:
     logger.error(f"Erreur lors de l'importation des modules: {e}")

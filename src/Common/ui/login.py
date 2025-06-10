@@ -35,12 +35,6 @@ class LoginWidget(FDialog, FWidget):
         self.title = FormLabel(
             f"<h4>{CConstants.APP_NAME}</h4><strong>Ver: {CConstants.APP_VERSION}</strong>"
         )
-        self.title.setStyleSheet(
-            f"""background: url({CConstants.APP_LOGO}) #DAF7A6;
-                border-radius: 14px 14px 8px 8px; border: 10px double #128a76;
-                width: 100%; height: auto; padding: 1em;
-                font: 8pt 'Arial';"""
-        )
         vbox = QHBoxLayout()
 
         self.loginUserGroupBox()
@@ -54,7 +48,7 @@ class LoginWidget(FDialog, FWidget):
 
     def loginUserGroupBox(self):
         self.topLeftGroupBox = QGroupBox(self.tr("Identification"))
-        self.liste_username = Owner.select().where(Owner.isactive == True)
+        self.liste_username = Owner.get_active_non_superusers()
 
         # Vérifier s'il y a des utilisateurs actifs
         if not self.liste_username.exists():
@@ -128,7 +122,7 @@ class LoginWidget(FDialog, FWidget):
         password = Owner().crypt_password(self.password_field.text().strip())
 
         # Déconnecter tous les utilisateurs actuellement connectés
-        for ow in Owner.select().where(Owner.islog == True):
+        for ow in Owner.select().where(Owner.islog):
             ow.islog = False
             ow.save()
 

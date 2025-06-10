@@ -137,7 +137,7 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
                 )
         except IntegrityError as e:
             field_error(
-                self.name_field,
+                self.username_field,
                 "L'utilisateurs %s existe déjà dans la base de donnée" % ow.username,
             )
         # else:

@@ -56,7 +56,7 @@ class DBCleanerWidget(QDialog, FWidget):
             self.tr("Suppression de tout les enregistrements")
         )
 
-        self.liste_username = Owner.select().where(Owner.isactive == True)
+        self.liste_username = Owner.get_active_non_superusers()
         # Combobox widget
         self.box_username = QComboBox()
         for index in self.liste_username:

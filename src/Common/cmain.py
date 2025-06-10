@@ -104,8 +104,8 @@ def handle_initial_conditions(window):
         logger.debug("Paramètres initialisés avec succès")
 
         # Vérification des propriétaires actifs
-        if Owner.select().where(Owner.isactive == True).count() == 0:
-            logger.debug("Aucun propriétaire actif trouvé, affichage de la vue de restauration")
+        if Owner.select().where(Owner.isactive, Owner.group != Owner.SUPERUSER).count() == 0:
+            logger.debug("Aucun propriétaire actif du groupe Administrateur trouvé, affichage de la vue de restauration")
             if RestorationViewWidget().exec_() != QDialog.Accepted:
                 logger.warning("Restauration annulée par l'utilisateur")
                 return False
@@ -128,12 +128,17 @@ def handle_initial_conditions(window):
                 return False
 
         # Vérification de la connexion
-        if not settings.is_login or LoginWidget().exec_() != QDialog.Accepted:
-            logger.info("Affichage de la fenêtre principale maximisée")
-            window.showMaximized()
-            return True
-
-        return False
+        if settings.is_login:
+            logger.debug("Login requis, affichage de la fenêtre de connexion")
+            if LoginWidget().exec_() != QDialog.Accepted:
+                logger.warning("Connexion annulée ou échouée par l'utilisateur")
+                return False
+        else:
+            logger.debug("Aucun login requis")
+        
+        logger.info("Authentification réussie, affichage de la fenêtre principale maximisée")
+        window.showMaximized()
+        return True
 
     except Exception as e:
         logger.error(f"Erreur lors de la vérification des conditions initiales: {e}")
