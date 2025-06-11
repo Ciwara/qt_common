@@ -60,7 +60,7 @@ class FMainWindow(QMainWindow):
     
     def __init__(self, parent=None, *args, **kwargs):
         QMainWindow.__init__(self)
-        print("FMainWindow v3.0 - Mode moderne activé")
+        print("🚀 FMainWindow v3.0 - Mode moderne activé avec succès")
         
         # Configuration de base
         self.current_theme = "light_modern"  # Thème par défaut
@@ -76,7 +76,7 @@ class FMainWindow(QMainWindow):
             self.setWindowTitle(CConstants.APP_NAME)
             self.setWindowIcon(QIcon(CConstants.APP_LOGO))
         except:
-            print("Configuration des icônes échouée - mode dégradé")
+            print("⚠️ Configuration des icônes échouée - mode dégradé activé")
         
         # StatusBar moderne
         self.statusbar = GStatusBar(self)
@@ -110,7 +110,7 @@ class FMainWindow(QMainWindow):
             self.available_themes = get_available_themes()
             self.apply_theme(self.current_theme)
         except ImportError:
-            print("Système de thèmes non disponible - utilisation du style par défaut")
+            print("🎨 Système de thèmes non disponible - utilisation du style par défaut")
             
     def _setup_animations(self):
         """Configuration des animations modernes"""
@@ -126,13 +126,13 @@ class FMainWindow(QMainWindow):
             self.setStyleSheet(style)
             self.current_theme = theme_key
             self.themeChanged.emit(theme_key)
-            print(f"Thème appliqué: {theme_key}")
+            print(f"🎨 Thème appliqué avec succès: {theme_key}")
             
             # Appliquer le thème à tous les widgets enfants
             self._apply_theme_to_children()
             
         except Exception as e:
-            print(f"Erreur lors de l'application du thème {theme_key}: {e}")
+            print(f"❌ Erreur lors de l'application du thème {theme_key}: {e}")
             
     def _apply_theme_to_children(self):
         """Applique le thème à tous les widgets enfants"""
@@ -177,8 +177,22 @@ class FMainWindow(QMainWindow):
             ur.islog = False
             ur.save()
 
-    def Notify(self, mssg="Hi", type_mssg="warring"):
+    def Notify(self, mssg="👋 Bonjour", type_mssg="info"):
+        """Affiche une notification moderne avec émojis"""
         from ..notification import Notification
+
+        # Ajouter des émojis selon le type de message
+        if not any(emoji in mssg for emoji in ["🎉", "✅", "⚠️", "❌", "ℹ️", "💡", "🔔"]):
+            if type_mssg == "success":
+                mssg = f"✅ {mssg}"
+            elif type_mssg == "warning":
+                mssg = f"⚠️ {mssg}"
+            elif type_mssg == "error":
+                mssg = f"❌ {mssg}"
+            elif type_mssg == "info":
+                mssg = f"ℹ️ {mssg}"
+            else:
+                mssg = f"🔔 {mssg}"
 
         self.notify = Notification(mssg=mssg, type_mssg=type_mssg)
 
@@ -204,7 +218,7 @@ class FWidget(QWidget):
                 self.current_theme = self.pp.get_current_theme()
                 self.apply_theme(self.current_theme)
             except Exception as e:
-                print(f"Erreur lors de l'héritage du thème: {e}")
+                print(f"⚠️ Erreur lors de l'héritage du thème: {e}")
 
     def _setup_modern_features(self):
         """Configuration des fonctionnalités modernes"""
@@ -225,7 +239,7 @@ class FWidget(QWidget):
                 self.current_theme = theme_key
                 self.update()  # Force le rafraîchissement visuel
         except Exception as e:
-            print(f"Erreur lors de l'application du thème au widget: {e}")
+            print(f"❌ Erreur lors de l'application du thème au widget: {e}")
 
     def page_names(self, app_name, txt):
         self.parentWidget().setWindowTitle("{} | {}".format(app_name, txt.upper()))
@@ -494,6 +508,9 @@ class Button(QCommandLinkButton):
         self.setIcon(QIcon.fromTheme("", QIcon("")))
         self.setCursor(Qt.PointingHandCursor)
         
+        # Amélioration de l'accessibilité
+        self.setToolTip("Cliquez pour exécuter l'action")
+        
         # Configuration moderne
         self._setup_modern_button()
         self._inherit_theme()
@@ -596,18 +613,22 @@ class DeletedBtt(Button):
     def __init__(self, *args, **kwargs):
         super(DeletedBtt, self).__init__(*args, **kwargs)
         self.setIcon(QIcon.fromTheme("edit-delete", QIcon("")))
+        
+        # Amélioration de l'accessibilité avec avertissement
+        self.setToolTip("🗑️ Supprimer définitivement - Action irréversible")
+        
         css = """
-                background-color:#fc8d83;
-                border-radius:6px;
-                border:1px solid #d83526;
+                background-color:#dc3545;
+                border-radius:8px;
+                border:1px solid #c82333;
                 color:#ffffff;
                 font-family:arial;
                 font-size:15px;
                 font-weight:bold;
-                padding:6px 24px;
+                padding:8px 24px;
                 text-decoration:none;
                 """
-        # self.setStyleSheet(css)
+        self.setStyleSheet(css)
 
 
 class WarningBtt(Button):
@@ -623,18 +644,21 @@ class WarningBtt(Button):
                 ),
             )
         )
+        
+        # Amélioration de l'accessibilité
+        self.setToolTip("⚠️ Attention - Action nécessitant une vigilance particulière")
+        
         css = """
-                    background-color:#ffec64;
-                    border-radius:6px;
-                    border:1px solid #ffaa22;
-                    color:#333333;
+                    background-color:#ffc107;
+                    border-radius:8px;
+                    border:1px solid #e0a800;
+                    color:#000000;
                     font-family:arial;
                     font-size:15px;
                     font-weight:bold;
-                    padding:6px 24px;
-
-                """
-        # self.setStyleSheet(css)
+                    padding:8px 24px;
+                    """
+        self.setStyleSheet(css)
 
 
 class ButtonSave(Button):
@@ -651,10 +675,14 @@ class ButtonSave(Button):
                 ),
             )
         )
-        # self.setIconSize(QSize(20, 20))
-        # self.setFocusPolicy(Qt.TabFocus)
+        
+        # Amélioration de l'accessibilité
+        self.setToolTip("💾 Sauvegarder les modifications")
+        
+        # Style moderne
         font = QFont()
         font.setBold(True)
+        self.setFont(font)
 
 
 class Button_menu(Button):
@@ -757,24 +785,30 @@ class LineEdit(QLineEdit):
 
 
 class IntLineEdit(LineEdit):
-
-    """Accepter que des nombre positive"""
+    """Champ de saisie pour nombres entiers positifs uniquement"""
 
     def __init__(self, parent=None):
         LineEdit.__init__(self, parent)
         self.setValidator(QIntValidator(self))
         self.setAlignment(Qt.AlignRight)
         self.setText(self.text().replace(" ", ""))
+        
+        # Amélioration de l'accessibilité
+        self.setToolTip("🔢 Saisissez uniquement des nombres entiers positifs")
+        self.setPlaceholderText("0")
 
 
 class FloatLineEdit(LineEdit):
-
-    """Accepter que des nombre positive"""
+    """Champ de saisie pour nombres décimaux positifs uniquement"""
 
     def __init__(self, parent=None):
         LineEdit.__init__(self, parent)
         self.setAlignment(Qt.AlignRight)
-        self.setValidator(QDoubleValidator(0.1, 0.1, 100, self))
+        self.setValidator(QDoubleValidator(0.1, 999999.99, 2, self))
+        
+        # Amélioration de l'accessibilité
+        self.setToolTip("🔢 Saisissez des nombres décimaux (ex: 12.50)")
+        self.setPlaceholderText("0.00")
 
 
 class FPeriodHolder(object):
@@ -1384,10 +1418,10 @@ class ThemeManager:
                         widget.apply_theme(theme_key)
                         
             self.current_theme = theme_key
-            print(f"Thème {theme_key} appliqué à toute l'application")
+            print(f"🎨 Thème {theme_key} appliqué avec succès à toute l'application")
             
         except Exception as e:
-            print(f"Erreur lors de l'application du thème: {e}")
+            print(f"❌ Erreur lors de l'application du thème: {e}")
     
     def get_current_theme(self) -> str:
         """Retourne le thème actuel"""
@@ -1431,7 +1465,7 @@ def get_dynamic_themes_list() -> dict:
         # Fallback vers la liste complète si le module n'est pas disponible
         return get_complete_themes_list()
     except Exception as e:
-        print(f"Erreur lors de la récupération des thèmes: {e}")
+        print(f"⚠️ Erreur lors de la récupération des thèmes: {e}")
         return get_complete_themes_list()
 
 def get_complete_themes_list() -> dict:
@@ -1768,16 +1802,17 @@ def create_themes_showcase_widget(parent=None) -> QWidget:
     layout.setSpacing(20)
     layout.setContentsMargins(30, 30, 30, 30)
     
-    # Titre principal
-    title = QLabel("🎨 Galerie des Thèmes Ultra-Modernes")
+    # Titre principal amélioré
+    title = QLabel("🎨 Galerie des Thèmes Ultra-Modernes v3.0")
     title.setStyleSheet("""
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 700;
         text-align: center;
-        padding: 20px;
+        padding: 24px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 12px;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     """)
     title.setAlignment(Qt.AlignCenter)
     layout.addWidget(title)
