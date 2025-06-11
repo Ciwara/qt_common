@@ -8,11 +8,12 @@ from PyQt5.QtWidgets import QAction, QMenuBar, QMessageBox
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
+from .theme_manager import get_theme_manager
 from .clean_db import DBCleanerWidget
 from .common import FWidget
 from .license_view import LicenseViewWidget
 from ..cstatic import CConstants, logger
-from .common import get_complete_themes_list
+
 
 
 class FMenuBar(QMenuBar, FWidget):
@@ -75,36 +76,38 @@ class FMenuBar(QMenuBar, FWidget):
         preference = self.addMenu("&Préference")
 
         if "theme" not in exclude_mn:
-            _theme = preference.addMenu("Theme")
+            _theme = preference.addMenu("🎨 Thème")
 
-            
-            # Récupération du thème actuel avec gestion d'erreur
+            # Utiliser le nouveau gestionnaire de thèmes centralisé
             try:
-                settings = Settings.init_settings()
-                current_theme = settings.theme
+                theme_manager = get_theme_manager()
+                current_theme = theme_manager.get_current_theme()
+                available_themes = theme_manager.get_available_themes()
                 logger.info(f"Thème actuel: {current_theme}")
             except Exception as e:
-                logger.warning(f"Erreur lors de la récupération des paramètres: {e}")
-                current_theme = "default"   # Thème par défaut
-                raise e
+                logger.warning(f"Erreur lors de la récupération du gestionnaire de thèmes: {e}")
+                current_theme = "light_modern"  # Thème par défaut
+                available_themes = {
+                    "light_modern": "🌟 Moderne Clair",
+                    "dark_modern": "🌙 Moderne Sombre"
+                }
             
-            themes = get_complete_themes_list()
-            # Construction du menu des thèmes
-            for theme_key, theme_display_name in themes.items():
+            # Construction du menu avec les 2 thèmes modernes
+            for theme_key, theme_display_name in available_themes.items():
                 icon = ""
                 if theme_key == current_theme:
                     icon = "accept"
                     
                 el_menu = QAction(  
                     QIcon("{}{}.png".format(CConstants.img_cmedia, icon)),
-                    theme_display_name,  # Utiliser le nom d'affichage au lieu du code
+                    theme_display_name,
                     self,
                 )
-                el_menu.setShortcut("")  # Pas de raccourci pour éviter les conflits
+                el_menu.setShortcut("")
                 el_menu.triggered.connect(
-                    lambda checked, goto=theme_key: self.change_theme(goto)
+                    lambda checked, goto=theme_key: self.change_theme_modern(goto)
                 )
-                _theme.addAction(el_menu)  # Pas de séparateur entre chaque thème
+                _theme.addAction(el_menu)
                 
             _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
         # Gestion du menu administrateur
@@ -192,61 +195,55 @@ class FMenuBar(QMenuBar, FWidget):
     def goto_license(self):
         self.open_dialog(LicenseViewWidget, modal=True)
 
-    def change_theme(self, theme):
+    def change_theme_modern(self, theme_key):
+        """Change le thème en utilisant le nouveau système centralisé"""
         try:
-            # Utiliser init_settings qui crée l'enregistrement s'il n'existe pas
-            settings = Settings.init_settings()
-            settings.theme = theme
-            settings.save()
-            logger.info(f"Thème changé vers: {theme}")
+            # Utiliser le nouveau gestionnaire de thèmes
+            theme_manager = get_theme_manager()
+            theme_manager.apply_theme(theme_key)
             
-            # Appliquer le nouveau thème dynamiquement sans redémarrage
-            self.apply_theme_dynamically()
+            # Sauvegarder dans les paramètres pour persistance
+            try:
+                settings = Settings.init_settings()
+                settings.theme = theme_key
+                settings.save()
+                logger.info(f"Thème sauvegardé: {theme_key}")
+            except Exception as e:
+                logger.warning(f"Erreur sauvegarde paramètres: {e}")
+            
+            # Notifier l'utilisateur
+            self.parent.Notify(f"Thème changé vers: {theme_manager.get_available_themes().get(theme_key, theme_key)}", "success")
+            
+            logger.info(f"🎨 Thème moderne appliqué: {theme_key}")
             
         except Exception as e:
-            logger.error(f"Erreur lors du changement de thème: {e}")
-            try:
-                # Fallback: créer un nouvel enregistrement
-                Settings.create(id=1, theme=theme)
-                logger.info(f"Nouveau paramètre créé avec thème: {theme}")
-                self.apply_theme_dynamically()
-            except Exception as e2:
-                logger.error(f"Impossible de créer les paramètres: {e2}")
-                return
+            logger.error(f"Erreur lors du changement de thème moderne: {e}")
+            self.parent.Notify("Erreur lors du changement de thème", "error")
+
+    def change_theme(self, theme):
+        """Méthode de compatibilité avec l'ancien système"""
+        # Rediriger vers la nouvelle méthode
+        if theme in ["light_modern", "dark_modern"]:
+            self.change_theme_modern(theme)
+        else:
+            # Mapper les anciens thèmes vers les nouveaux
+            theme_mapping = {
+                "default": "light_modern",
+                "dark": "dark_modern",
+                "light": "light_modern"
+            }
+            new_theme = theme_mapping.get(theme, "light_modern")
+            self.change_theme_modern(new_theme)
 
     def apply_theme_dynamically(self):
-        """Applique le nouveau thème sans redémarrer l'application"""
+        """Méthode de compatibilité - rediriger vers le nouveau système"""
         try:
-            # Utiliser le nouveau gestionnaire de thèmes centralisé
-            from .themes import apply_theme_immediately, get_theme_manager
-            
-            # Appliquer le thème à TOUTE l'application (toutes fenêtres et dialogues)
-            success = apply_theme_immediately()
-            
-            if success:
-                logger.info("Thème appliqué dynamiquement avec succès à toute l'application")
-                
-                # Utiliser le gestionnaire pour la notification
-                manager = get_theme_manager()
-                manager.notify_theme_change(self.parent, manager.get_current_theme())
-                
-            else:
-                logger.warning("Échec de l'application du thème")
-                
+            theme_manager = get_theme_manager()
+            current_theme = theme_manager.get_current_theme()
+            theme_manager.apply_theme(current_theme)
+            logger.info("Thème appliqué via le système moderne")
         except Exception as e:
-            logger.error(f"Erreur lors de l'application dynamique du thème: {e}")
-            # En cas d'erreur, proposer le redémarrage classique
-            from PyQt5.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
-                self.parent,
-                "Changement de thème", 
-                "Le thème a été sauvegardé mais n'a pas pu être appliqué dynamiquement.\n\n"
-                "Voulez-vous redémarrer l'application pour voir les changements ?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply == QMessageBox.Yes:
-                self.restart()
+            logger.error(f"Erreur application thème dynamique: {e}")
     
     def refresh_widgets_recursively(self, widget):
         """Rafraîchit récursivement tous les widgets enfants"""

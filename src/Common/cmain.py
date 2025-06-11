@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QDialog, QApplication
 
 from .cstatic import CConstants, logger
 from .models import Organization, Owner, Settings, init_database, dbh
+from .ui.theme_manager import get_theme_manager
 from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
@@ -68,17 +69,13 @@ def initialize_common_main_window():
 def apply_global_theme():
     """Applique le thème à toute l'application"""
     try:
-        # Essayer d'utiliser le nouveau système de thèmes
-        from .ui.theme_utils import apply_theme_immediately
-        success = apply_theme_immediately()
-        if success:
-            logger.info("Thème appliqué globalement à toute l'application")
-        else:
-            logger.warning("Échec de l'application globale du thème, utilisation du fallback")
-            fallback_theme_application()
+        # Utiliser le nouveau système de thèmes centralisé
+        theme_manager = get_theme_manager()
+        theme_manager.apply_theme("light_modern")
+        logger.info("Thème appliqué globalement à toute l'application")
     except ImportError:
         # Fallback vers l'ancien système
-        logger.debug("theme_utils non disponible, utilisation du fallback")
+        logger.debug("theme_manager non disponible, utilisation du fallback")
         fallback_theme_application()
     except Exception as e:
         logger.warning(f"Erreur lors de l'application du thème global: {e}")

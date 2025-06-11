@@ -15,8 +15,8 @@ sys.path.insert(0, str(src_path))
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, 
-    QPushButton, QLabel, QTabWidget, QTextEdit, QGroupBox, QFormLayout,
-    QMessageBox, QFrame
+    QPushButton, QLabel, QTextEdit, QGroupBox, QFormLayout,
+    QMessageBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -26,7 +26,6 @@ try:
     # Import des composants principaux
     from Common.cstatic import logger, CConstants
     from Common.models import Settings, Organization, Owner, dbh
-    from Common.ui.style_manager import get_style, apply_theme, get_available_themes
     
     # Import des widgets modernes s'ils sont disponibles
     try:
@@ -162,7 +161,8 @@ class CommonDemoSimple(QMainWindow):
         themes_layout = QHBoxLayout()
         
         try:
-            themes = get_available_themes()
+            theme_manager = get_theme_manager()
+            themes = theme_manager.get_available_themes()
             for theme_key, theme_name in themes.items():
                 if MODERN_WIDGETS_AVAILABLE:
                     btn = ModernButton(theme_name, button_type="default")
@@ -267,8 +267,8 @@ class CommonDemoSimple(QMainWindow):
     def apply_theme(self):
         """Applique le thème actuel"""
         try:
-            current_style = get_style()
-            self.setStyleSheet(current_style)
+            theme_manager = get_theme_manager()
+            theme_manager.apply_theme(theme_manager.get_current_theme())
             self.log_message("✅ Thème appliqué avec succès")
         except Exception as e:
             self.log_message(f"❌ Erreur lors de l'application du thème: {e}")
@@ -276,8 +276,8 @@ class CommonDemoSimple(QMainWindow):
     def change_theme(self, theme_key):
         """Change le thème de l'application"""
         try:
-            new_style = apply_theme(theme_key)
-            self.setStyleSheet(new_style)
+            theme_manager = get_theme_manager()
+            theme_manager.apply_theme(theme_key)
             self.log_message(f"🎨 Thème changé vers: {theme_key}")
             self.statusBar().showMessage(f"Thème appliqué: {theme_key}")
         except Exception as e:
