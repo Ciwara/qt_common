@@ -7,7 +7,6 @@
 import ctypes
 import hashlib
 import locale
-import logging
 import os
 import subprocess
 import sys
@@ -43,7 +42,7 @@ def internet_on():
 
 def access_server():
     if not CConstants.SERV:
-        logger.debug("Not server mode")
+        logger.info("Not server mode")
         return False
 
     if not internet_on():

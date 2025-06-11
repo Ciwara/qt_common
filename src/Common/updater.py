@@ -115,11 +115,12 @@ class TaskThreadUpdater(QThread):
 
     def update_data(self, orga_slug):
         logger.info("Updating data")
-        from .database import Setup
+        from .cdatabase import AdminDatabase
 
         self.contact_server_signal.emit()
 
-        for m in Setup.LIST_CREAT:
+        setup = AdminDatabase()
+        for m in setup.LIST_CREAT:
             for d in m.select().where(m.is_syncro == True):
                 resp = Network().submit(
                     "update-data",

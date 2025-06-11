@@ -41,6 +41,10 @@ file_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
+# Configuration du logger Peewee pour réduire les logs DEBUG SQL
+peewee_logger = logging.getLogger('peewee')
+peewee_logger.setLevel(logging.INFO)  # Masquer les requêtes SQL DEBUG
+
 logger.debug("Initialisation du module cstatic")
 
 # ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

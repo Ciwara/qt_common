@@ -59,7 +59,7 @@ class BaseModel(peewee.Model):
         self.save()
 
     def save_(self):
-        logger.debug(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {self.id})")
+        logger.info(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {self.id})")
         self.is_syncro = False
         self.save()
 
@@ -71,15 +71,15 @@ class BaseModel(peewee.Model):
 
     @classmethod
     def all(cls):
-        logger.debug(f"Récupération de tous les enregistrements de {cls.__name__}")
+        logger.info(f"Récupération de tous les enregistrements de {cls.__name__}")
         return list(cls.select())
 
     def save(self, *args, **kwargs):
-        logger.debug(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {getattr(self, 'id', 'new')})")
+        logger.info(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {getattr(self, 'id', 'new')})")
         return super().save(*args, **kwargs)
 
     def delete_instance(self, *args, **kwargs):
-        logger.debug(f"Suppression de l'enregistrement {self.__class__.__name__} (id: {self.id})")
+        logger.info(f"Suppression de l'enregistrement {self.__class__.__name__} (id: {self.id})")
         return super().delete_instance(*args, **kwargs)
 
 
@@ -217,9 +217,21 @@ class Owner(BaseModel):
         return pw
 
     def save(self):
+        # Log informatif pour les sauvegardes importantes
+        action = "mise à jour"
+        if not hasattr(self, 'id') or self.id is None:
+            action = "création"
+        
         if self.islog:
             self.login_count += 1
+            logger.info(f"Connexion de l'utilisateur '{self.username}' (total: {self.login_count})")
+        
         super(Owner, self).save()
+        
+        # Log de confirmation plus propre
+        if action == "création":
+            logger.info(f"✅ Utilisateur '{self.username}' ({self.group}) créé avec succès")
+        # Éviter de logger chaque mise à jour mineure
 
     def is_login(self):
         return Owner.select().get(islog=True)
@@ -236,7 +248,7 @@ class Owner(BaseModel):
 
 
 class Organization(BaseModel):
-    logo_orga = peewee.CharField(verbose_name="", null=True)
+    logo_orga = peewee.TextField(verbose_name="", null=True)
     name_orga = peewee.CharField(verbose_name="")
     phone = peewee.IntegerField(null=True, verbose_name="")
     bp = peewee.CharField(null=True, verbose_name="")
@@ -437,7 +449,7 @@ class Settings(BaseModel):
         """Initialise les paramètres par défaut si nécessaire"""
         try:
             settings = cls.get(id=1)
-            logger.debug("Paramètres existants trouvés")
+            # logger.debug("Paramètres existants trouvés")  # Message masqué
         except cls.DoesNotExist:
             logger.debug("Création des paramètres par défaut")
             
