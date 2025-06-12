@@ -166,20 +166,13 @@ def cmain(test=False):
         
         # Tentative d'initialisation de la fenêtre principale
         window = None
-        try:
-            # Essayer d'abord la fenêtre principale externe
+
+        if test:
+            window = initialize_common_main_window()
+            logger.info("Fenêtre principale Common utilisée")
+        else:
             window = initialize_main_window()
             logger.info("Fenêtre principale externe utilisée")
-        except Exception as e:
-            #raise e
-            logger.warning(f"Impossible d'utiliser la fenêtre principale externe: {e}")
-            try:
-                # Utiliser la fenêtre commune du module Common
-                window = initialize_common_main_window()
-                logger.info("Fenêtre principale Common utilisée")
-            except Exception as e2:
-                logger.error(f"Impossible d'initialiser aucune fenêtre: {e2}")
-                return False
 
         if window is None:
             logger.error("Aucune fenêtre n'a pu être initialisée")
