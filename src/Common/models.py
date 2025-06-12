@@ -533,6 +533,117 @@ class Settings(BaseModel):
         
         return super(Settings, self).save(*args, **filtered_kwargs)
 
+def init_default_version():
+    """Initialise une version par défaut avec id=1 si nécessaire"""
+    try:
+        # Vérifier si un enregistrement Version avec id=1 existe
+        version_exists = Version.get_or_none(Version.id == 1)
+        
+        if version_exists is None:
+            logger.info("Création de la version par défaut avec id=1")
+            
+            # Utiliser une insertion SQL directe pour garantir id=1
+            try:
+                global dbh
+                if dbh is None:
+                    logger.error("dbh n'est pas initialisé")
+                    raise Exception("Base de données non initialisée")
+                    
+                query = """
+                INSERT OR REPLACE INTO version 
+                (id, is_syncro, last_update_date, date, number)
+                VALUES (1, 0, datetime('now'), datetime('now'), 1)
+                """
+                dbh.execute_sql(query)
+                logger.info("✅ Version par défaut créée avec succès (id=1, number=1)")
+                
+                # Vérifier la création
+                version = Version.get(id=1)
+                logger.debug(f"Vérification création réussie - version: {version.display_name()}")
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de la création SQL de Version: {e}")
+                # Fallback vers la méthode classique
+                try:
+                    version = Version(number=1)
+                    version.save()
+                    logger.info("✅ Version par défaut créée avec succès via fallback")
+                    return True
+                except Exception as e2:
+                    logger.error(f"Erreur fallback Version: {e2}")
+                    return False
+        else:
+            logger.debug(f"Une version avec id=1 existe déjà: {version_exists.display_name()}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Erreur lors de la création de la version par défaut: {e}")
+        return False
+
+def init_default_organization():
+    """Initialise une organisation par défaut avec id=1 si nécessaire"""
+    try:
+        # Vérifier si un enregistrement Organization avec id=1 existe
+        org_exists = Organization.get_or_none(Organization.id == 1)
+        
+        if org_exists is None:
+            logger.info("Création de l'organisation par défaut avec id=1")
+            
+            # Utiliser une insertion SQL directe pour garantir id=1
+            try:
+                global dbh
+                if dbh is None:
+                    logger.error("dbh n'est pas initialisé")
+                    raise Exception("Base de données non initialisée")
+                    
+                query = """
+                INSERT OR REPLACE INTO organization 
+                (id, is_syncro, last_update_date, logo_orga, name_orga, phone, bp, email_org, adress_org, slug)
+                VALUES (1, 0, datetime('now'), NULL, ?, 0, ?, ?, ?, ?)
+                """
+                dbh.execute_sql(query, [
+                    "Organisation par défaut",
+                    "BP 000", 
+                    "contact@example.com",
+                    "Adresse par défaut",
+                    "default-org"
+                ])
+                logger.info("✅ Organisation par défaut créée avec succès (id=1)")
+                
+                # Vérifier la création
+                org = Organization.get(id=1)
+                logger.debug(f"Vérification création réussie - organisation: {org.name_orga}")
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de la création SQL d'Organization: {e}")
+                # Fallback vers la méthode classique
+                try:
+                    org = Organization(
+                        name_orga="Organisation par défaut",
+                        phone=0,
+                        bp="BP 000",
+                        email_org="contact@example.com",
+                        adress_org="Adresse par défaut",
+                        slug="default-org"
+                    )
+                    org.save()
+                    logger.info("✅ Organisation par défaut créée avec succès via fallback")
+                    return True
+                except Exception as e2:
+                    logger.error(f"Erreur fallback Organization: {e2}")
+                    return False
+        else:
+            logger.debug(f"Une organisation avec id=1 existe déjà: {org_exists.name_orga}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Erreur lors de la création de l'organisation par défaut: {e}")
+        return False
+
 def init_default_superuser():
     """Initialise un superuser par défaut si nécessaire"""
     try:
@@ -672,7 +783,9 @@ def init_database():
         Settings.init_settings()
         logger.info("Paramètres par défaut initialisés")
         
-        # Initialisation de l'administrateur et du superuser par défaut
+        # Initialisation des enregistrements par défaut
+        init_default_version()
+        init_default_organization()
         init_default_superuser()
         
         return True

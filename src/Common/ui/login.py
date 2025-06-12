@@ -232,8 +232,6 @@ class LoginWidget(FDialog, FWidget):
         username = str(users_list[current_index].username)
         password = Owner().crypt_password(self.password_field.text().strip())
 
-        print(f"🔐 Tentative de connexion pour l'utilisateur: {username}")
-
         # Déconnecter tous les utilisateurs actuellement connectés
         for ow in Owner.select().where(Owner.islog):
             ow.islog = False
