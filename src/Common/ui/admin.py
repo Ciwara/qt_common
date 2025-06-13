@@ -217,7 +217,7 @@ class OrganizationTableWidget(FWidget):
         # Combobox widget
 
         # self.checked = QCheckBox("Active")
-        # if self.organization.is_login:
+        # if self.organization.auth_required:
         #     self.checked.setCheckState(Qt.Checked)
         # self.checked.setToolTip(
         #     u"""Cocher si vous voulez pour deactive
@@ -478,7 +478,7 @@ class SettingsTableWidget(FWidget):
             self.settings = type('MockSettings', (), {
                 'url': 'http://file-repo.ml',
                 'theme': "default",
-                'is_login': True,
+                'auth_required': True,
                 'after_cam': 1,
                 'devise': Settings.XOF,
                 'toolbar_position': Settings.LEFT,
@@ -534,7 +534,7 @@ class SettingsTableWidget(FWidget):
                 self.box_position.setCurrentIndex(index)
 
         self.checked = QCheckBox("Active")
-        if hasattr(self.settings, 'is_login') and self.settings.is_login:
+        if hasattr(self.settings, 'auth_required') and self.settings.auth_required:
             self.checked.setCheckState(Qt.Checked)
         self.checked.setToolTip(
             """Cocher si vous voulez pour deactive
@@ -578,7 +578,7 @@ class SettingsTableWidget(FWidget):
             settings = Settings.init_settings()
             
             settings.url = str(self.url_field.text())
-            settings.is_login = (
+            settings.auth_required = (
                 True if self.checked.checkState() == Qt.Checked else False
             )
             settings.toolbar = (

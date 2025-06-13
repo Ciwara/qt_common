@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QGroupBox,
     QFormLayout,
-    QMessageBox
+    QMessageBox,
+    QDialog
 )
 
 from ..cstatic import CConstants, logger
@@ -198,6 +199,20 @@ class CommonMainWindow(FMainWindow):
         self.setWindowIcon(QIcon(f"{CConstants.APP_LOGO}"))
         self.setWindowTitle(f"{CConstants.APP_NAME} {CConstants.APP_VERSION}")
 
+        # Vérifier si un utilisateur est connecté
+        from ..models import Owner, Settings
+        settings = Settings.select().where(Settings.id == 1).first()
+        
+        if settings and settings.auth_required:
+            # Vérifier si un utilisateur est connecté
+            if not Owner.select().where(Owner.is_identified == True).exists():
+                logger.warning("Aucun utilisateur connecté, affichage de la fenêtre de connexion")
+                from .login import LoginWidget
+                if LoginWidget().exec_() != QDialog.Accepted:
+                    logger.warning("Connexion annulée ou échouée")
+                    self.close()
+                    return
+
         self.toolBar = QToolBar()
         self.addToolBar(Qt.LeftToolBarArea, self.toolBar)
 
@@ -263,11 +278,11 @@ class CommonMainWindow(FMainWindow):
     def page_width(self):
         return self.width() - 100
 
-    def exit(self):
-        logger.info("Fermeture de l'application")   
-        from ..models import Settings
-        settings = Settings.get(id=1)
-        if not settings.is_login:
-            self.logout()
-        else:
-            self.close()
+    # def exit(self):
+    #     logger.info("Fermeture de l'application")   
+    #     from ..models import Settings
+    #     settings = Settings.get(id=1)
+    #     if not settings.auth_required:
+    #         self.logout()
+    #     else:
+    #         self.close()

@@ -362,7 +362,7 @@ class CommonDemoSimple(QMainWindow):
 ⚙️ Paramètres actuels:
 
 • Thème: {settings.theme}
-• Login requis: {'Oui' if settings.is_login else 'Non'}
+• Login requis: {'Oui' if settings.auth_required else 'Non'}
 • Barre d'outils: {'Visible' if settings.toolbar else 'Cachée'}
 • Position barre: {settings.toolbar_position}
 • URL: {settings.url}

@@ -184,7 +184,7 @@ class Owner(BaseModel):
 
     username = peewee.CharField(max_length=30, unique=True, verbose_name="Identifiant")
     group = peewee.CharField(default=USER)
-    islog = peewee.BooleanField(default=False)
+    is_identified = peewee.BooleanField(default=False)
     phone = peewee.CharField(max_length=30, null=True, verbose_name="Telephone")
     password = peewee.CharField(max_length=150)
     isactive = peewee.BooleanField(default=True)
@@ -195,7 +195,7 @@ class Owner(BaseModel):
         return {
             "username": self.username,
             "group": self.group,
-            "islog": self.islog,
+            "is_identified": self.is_identified,
             "phone": self.phone,
             "password": self.password,
             "isactive": self.isactive,
@@ -222,7 +222,7 @@ class Owner(BaseModel):
         if not hasattr(self, 'id') or self.id is None:
             action = "création"
         
-        if self.islog:
+        if self.is_identified:
             self.login_count += 1
             logger.info(f"Connexion de l'utilisateur '{self.username}' (total: {self.login_count})")
         
@@ -234,7 +234,7 @@ class Owner(BaseModel):
         # Éviter de logger chaque mise à jour mineure
 
     def is_login(self):
-        return Owner.select().get(islog=True)
+        return Owner.select().get(is_identified=True)
     
     @classmethod
     def get_non_superusers(cls):
@@ -436,7 +436,7 @@ class Settings(BaseModel):
     POSITION = {LEFT: "Gauche", RIGHT: "Droite", TOP: "Haut", BOTTOM: "Bas"}
 
     slug = peewee.CharField(choices=LCONFIG, default=DEFAULT)
-    is_login = peewee.BooleanField(default=True)
+    auth_required = peewee.BooleanField(default=True)
     after_cam = peewee.IntegerField(default=1, verbose_name="")
     toolbar = peewee.BooleanField(default=True)
     toolbar_position = peewee.CharField(choices=POSITION, default=LEFT)
@@ -462,12 +462,12 @@ class Settings(BaseModel):
                     
                 query = """
                 INSERT OR REPLACE INTO settings 
-                (id, is_syncro, last_update_date, slug, is_login, after_cam, toolbar, toolbar_position, url, theme, devise)
+                (id, is_syncro, last_update_date, slug, auth_required, after_cam, toolbar, toolbar_position, url, theme, devise)
                 VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 dbh.execute_sql(query, [
                     cls.DEFAULT,      # slug
-                    True,             # is_login
+                    True,             # auth_required
                     1,                # after_cam
                     True,             # toolbar
                     cls.LEFT,         # toolbar_position
@@ -487,7 +487,7 @@ class Settings(BaseModel):
                 settings = cls(
                     id=1,
                     slug=cls.DEFAULT,
-                    is_login=True,
+                    auth_required=True,
                     after_cam=1,
                     toolbar=True,
                     toolbar_position=cls.LEFT,
@@ -503,7 +503,7 @@ class Settings(BaseModel):
     def data(self):
         return {
             "slug": self.slug,
-            "is_login": self.is_login,
+            "auth_required": self.auth_required,
             "after_cam": self.after_cam,
             "toolbar": self.toolbar,
             "toolbar_position": self.toolbar_position,
@@ -518,7 +518,7 @@ class Settings(BaseModel):
         return self.display_name()
 
     def display_name(self):
-        return "{}/{}/{}".format(self.slug, self.is_login, self.theme)
+        return "{}/{}/{}".format(self.slug, self.auth_required, self.theme)
 
     def save(self, *args, **kwargs):
         """ """
@@ -660,7 +660,7 @@ def init_default_superuser():
             superuser.password = superuser.crypt_password("superuser123")  # Mot de passe par défaut
             superuser.phone = "00000000"
             superuser.isactive = True
-            superuser.islog = False
+            superuser.is_identified = False
             superuser.login_count = 0
             superuser.save()
             

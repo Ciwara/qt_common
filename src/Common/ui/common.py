@@ -170,17 +170,17 @@ class FMainWindow(QMainWindow):
 
     def logout(self):
         from ..models import Owner
-        for ur in Owner.select().where(Owner.islog):
-            ur.islog = False
+        for ur in Owner.select().where(Owner.is_identified):
+            ur.is_identified = False
             ur.save()
 
 
     def exit(self):   
         print("Fermeture de l'application")
         from ..models import Settings
-        print("settings", Settings.select().where(Settings.id == 1).first())
         settings = Settings.select().where(Settings.id == 1).first()
-        if not settings.is_login:
+        print(settings.auth_required)
+        if settings.auth_required:
             print("logout")
             self.logout()
         import sys

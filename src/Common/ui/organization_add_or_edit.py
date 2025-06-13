@@ -326,11 +326,11 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
         else:
             print("⚠️ Aucun logo base64 à sauvegarder")
         
-        # Les champs after_cam et is_login appartiennent à Settings, pas à Organization
+        # Les champs after_cam et auth_required appartiennent à Settings, pas à Organization
         # Mettre à jour les paramètres séparément
         from ..models import Settings
         settings = Settings.get(id=1)
-        settings.is_login = True if self.checked.checkState() == Qt.Checked else False
+        settings.auth_required = True if self.checked.checkState() == Qt.Checked else False
         settings.save()
         try:
             org.save()

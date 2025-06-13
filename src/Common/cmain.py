@@ -125,11 +125,10 @@ def handle_initial_conditions(window):
                 return False
 
         # Vérification de la connexion
-        if settings.is_login:
-            logger.debug("Login requis, affichage de la fenêtre de connexion")
-            if LoginWidget().exec_() != QDialog.Accepted:
-                logger.warning("Connexion annulée ou échouée par l'utilisateur")
-                return False
+        if not settings.auth_required or LoginWidget().exec_() != QDialog.Accepted:
+            logger.info("Affichage de la fenêtre principale maximisée")
+            window.showMaximized()
+            return True
         else:
             logger.debug("Aucun login requis")
         

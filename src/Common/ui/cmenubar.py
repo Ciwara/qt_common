@@ -25,6 +25,69 @@ class FMenuBar(QMenuBar, FWidget):
         self.parent = parent
 
         exclude_mn = CConstants.EXCLUDE_MENU_ADMIN
+        
+        # Menu Utilisateur
+        self.user_menu = self.addMenu("👤 Utilisateur")
+        
+        # Ajouter les informations de l'utilisateur connecté
+        try:
+            ow = Owner.select().where(Owner.is_identified==True)
+            print("jkjjjjj-----", ow.exists())
+            if ow.exists():
+                owner = ow.get()
+                # Menu déroulant avec les informations de l'utilisateur
+                user_info = QAction(
+                    QIcon(f"{CConstants.img_cmedia}user_active.png"),
+                    f"👤 {owner.username}",
+                    self
+                )
+                user_info.setEnabled(False)  # Non cliquable
+                self.user_menu.addAction(user_info)
+                
+                # Séparateur
+                self.user_menu.addSeparator()
+                
+                # Informations détaillées
+                user_details = QAction(
+                    QIcon(f"{CConstants.img_cmedia}info.png"),
+                    f"Groupe: {'👑 Admin' if owner.group == Owner.ADMIN else '👤 Utilisateur'}",
+                    self
+                )
+                user_details.setEnabled(False)
+                self.user_menu.addAction(user_details)
+                
+                if owner.phone:
+                    phone_action = QAction(
+                        QIcon(f"{CConstants.img_cmedia}phone.png"),
+                        f"📱 {owner.phone}",
+                        self
+                    )
+                    phone_action.setEnabled(False)
+                    self.user_menu.addAction(phone_action)
+                
+                # Dernière connexion
+                last_login = QAction(
+                    QIcon(f"{CConstants.img_cmedia}time.png"),
+                    f"🕒 Dernière connexion: {owner.last_login.strftime('%d/%m/%Y %H:%M')}",
+                    self
+                )
+                last_login.setEnabled(False)
+                self.user_menu.addAction(last_login)
+                
+                # Séparateur
+                self.user_menu.addSeparator()
+                
+                # Bouton de déconnexion
+                logout_action = QAction(
+                    QIcon(f"{CConstants.img_cmedia}logout.png"),
+                    "🔒 Déconnexion",
+                    self
+                )
+                logout_action.triggered.connect(self.logout)
+                self.user_menu.addAction(logout_action)
+        except Exception as e:
+            logger.error(f"Erreur lors de l'ajout des informations utilisateur: {e}")
+        
         # Menu File
         self.file_ = self.addMenu("&Fichier")
         # Export
@@ -52,21 +115,21 @@ class FMenuBar(QMenuBar, FWidget):
         backup.addAction(import_db)
 
         try:
-            ow = Owner.select().where(Owner.islog)
+            ow = Owner.select().where(Owner.is_identified==True )
             logger.debug(f"Recherche des propriétaires connectés: {ow.exists()}")
             
             if ow.exists():
                 owner = ow.get()
                 logger.debug(f"Propriétaire trouvé - groupe: {owner.group}, Admin requis: {Owner.ADMIN}")
                 
-                if owner.group == Owner.ADMIN and "del_all" not in exclude_mn:
+                if owner.group in [Owner.ADMIN, Owner.SUPERUSER] and "del_all" not in exclude_mn:
                     backup.addAction(
                         "Suppression de tout les enregistrements", self.goto_clean_db
                     )
                     logger.debug("Menu de suppression ajouté pour l'administrateur")
             else:
                 logger.debug("Aucun propriétaire connecté trouvé")
-                
+
         except Exception as e:
             logger.error(f"Erreur lors de la vérification des droits administrateur: {e}")
 

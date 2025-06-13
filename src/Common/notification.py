@@ -7,9 +7,9 @@
 #  File: Notification System  #
 ###############################
 import time
-from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint
-from PyQt5.QtGui import QColor, QPainter, QPainterPath, QFont
+from PyQt5.QtGui import QColor, QPainter, QPainterPath
 
 
 class Notification(QtWidgets.QWidget):

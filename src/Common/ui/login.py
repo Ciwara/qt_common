@@ -23,6 +23,8 @@ try:
 except Exception as exc:
     print(f"⚠️ Erreur lors de l'importation de CConstants: {exc}")
 
+import datetime
+
 
 class LoginWidget(FDialog, FWidget):
     title_page = "🔐 Connexion Sécurisée"
@@ -233,13 +235,17 @@ class LoginWidget(FDialog, FWidget):
         password = Owner().crypt_password(self.password_field.text().strip())
 
         # Déconnecter tous les utilisateurs actuellement connectés
-        for ow in Owner.select().where(Owner.islog):
-            ow.islog = False
+        for ow in Owner.select().where(Owner.is_identified == True):
+            ow.is_identified = False
             ow.save()
 
         try:
             owner = Owner.get(Owner.username == username, Owner.password == password)
-            owner.islog = True
+            
+            # Mettre à jour les informations de connexion
+            owner.is_identified = True
+            owner.last_login = datetime.datetime.now()
+            owner.login_count += 1
             owner.save()
             
             # Messages de succès
