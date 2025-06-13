@@ -108,14 +108,17 @@ class DBCleanerWidget(QDialog, FWidget):
             return
 
         username = str(self.liste_username[self.box_username.currentIndex()])
-        password = Owner().crypt_password(str(self.password_field.text()).strip())
-        # check completeness
+        password = str(self.password_field.text()).strip()
 
         try:
-            Owner.get(Owner.username == username, Owner.password == password)
+            owner = Owner.get(Owner.username == username)
+            if not owner.verify_password(password):
+                print("❌ Mot de passe incorrect")
+                field_error(self.password_field, "Mot de passe incorrect")
+                return False
             self.cleaner_db()
         except Exception as e:
-            print(e)
+            print(f"❌ Erreur: {e}")
             field_error(self.password_field, "Mot de passe incorrect")
             return False
 

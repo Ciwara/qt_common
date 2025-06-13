@@ -8,11 +8,12 @@ import hashlib
 import os
 import sys
 import time
-
-from peewee_migrate import Router
+import bcrypt
+import re
+import peewee
 from datetime import datetime, timedelta
 
-import peewee
+from peewee_migrate import Router
 from playhouse.migrate import DateTimeField, BooleanField
 from peewee import SqliteDatabase
 
@@ -212,9 +213,40 @@ class Owner(BaseModel):
         )
 
     def crypt_password(self, password):
-        pw = hashlib.sha224(str(password).encode("utf-8")).hexdigest()
-        print(pw)
-        return pw
+        """Hachage sécurisé du mot de passe avec bcrypt"""
+        if not password:
+            return None
+        # Génération d'un sel unique pour chaque mot de passe
+        salt = bcrypt.gensalt()
+        # Hachage du mot de passe avec le sel
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
+
+    def verify_password(self, password):
+        """Vérifie si le mot de passe correspond au hachage stocké"""
+        if not password or not self.password:
+            return False
+        return bcrypt.checkpw(password.encode('utf-8'), self.password.encode('utf-8'))
+
+    @staticmethod
+    def validate_password(password):
+        """Valide la force du mot de passe selon des critères de sécurité"""
+        if len(password) < 8:
+            return False, "Le mot de passe doit contenir au moins 8 caractères"
+        
+        if not re.search(r"[A-Z]", password):
+            return False, "Le mot de passe doit contenir au moins une majuscule"
+            
+        if not re.search(r"[a-z]", password):
+            return False, "Le mot de passe doit contenir au moins une minuscule"
+            
+        if not re.search(r"\d", password):
+            return False, "Le mot de passe doit contenir au moins un chiffre"
+            
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+            return False, "Le mot de passe doit contenir au moins un caractère spécial"
+            
+        return True, "Mot de passe valide"
 
     def save(self):
         # Log informatif pour les sauvegardes importantes
@@ -222,16 +254,12 @@ class Owner(BaseModel):
         if not hasattr(self, 'id') or self.id is None:
             action = "création"
         
-        if self.is_identified:
-            self.login_count += 1
-            logger.info(f"Connexion de l'utilisateur '{self.username}' (total: {self.login_count})")
-        
+        # Ne pas incrémenter le compteur de connexions ici car c'est déjà fait dans login()
         super(Owner, self).save()
         
         # Log de confirmation plus propre
         if action == "création":
             logger.info(f"✅ Utilisateur '{self.username}' ({self.group}) créé avec succès")
-        # Éviter de logger chaque mise à jour mineure
 
     def is_login(self):
         return Owner.select().get(is_identified=True)

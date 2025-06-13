@@ -205,13 +205,18 @@ class CommonMainWindow(FMainWindow):
         
         if settings and settings.auth_required:
             # Vérifier si un utilisateur est connecté
-            if not Owner.select().where(Owner.is_identified == True).exists():
-                logger.warning("Aucun utilisateur connecté, affichage de la fenêtre de connexion")
+            connected_owner = Owner.select().where(Owner.is_identified == True).first()
+            if not connected_owner:
+                logger.warning("Aucun utilisateur connecté")
                 from .login import LoginWidget
-                if LoginWidget().exec_() != QDialog.Accepted:
+                login_widget = LoginWidget()
+                if login_widget.exec_() != QDialog.Accepted:
                     logger.warning("Connexion annulée ou échouée")
                     self.close()
                     return
+                logger.info(f"Utilisateur connecté: {login_widget.connected_owner.username}")
+            else:
+                logger.info(f"Utilisateur déjà connecté: {connected_owner.username}")
 
         self.toolBar = QToolBar()
         self.addToolBar(Qt.LeftToolBarArea, self.toolBar)

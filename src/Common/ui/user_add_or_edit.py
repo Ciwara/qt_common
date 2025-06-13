@@ -166,16 +166,22 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         if not self.check_password_is_valide():
             return False
             
-        # Validation supplémentaire de la force du mot de passe
+        # Validation de la force du mot de passe
         password = str(self.password_field.text()).strip()
-        if len(password) < 4:
+        is_valid, message = Owner.validate_password(password)
+        if not is_valid:
             QMessageBox.warning(
                 self,
                 "⚠️ Mot de passe faible",
-                "🔒 Le mot de passe est trop court.\n\n"
-                "Recommandation : Utilisez au moins 6 caractères\n"
-                "pour un mot de passe plus sécurisé."
+                f"🔒 {message}\n\n"
+                "Le mot de passe doit contenir :\n"
+                "• Au moins 8 caractères\n"
+                "• Au moins une majuscule\n"
+                "• Au moins une minuscule\n"
+                "• Au moins un chiffre\n"
+                "• Au moins un caractère spécial"
             )
+            return False
             
         return True
 
@@ -221,7 +227,7 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
 
         ow = self.owner
         ow.username = username
-        ow.password = Owner().crypt_password(password) if self.new else password
+        ow.password = ow.crypt_password(password) if self.new else password
         ow.phone = phone
         ow.group = group
         ow.isactive = status

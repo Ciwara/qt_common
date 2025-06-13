@@ -232,15 +232,23 @@ class LoginWidget(FDialog, FWidget):
             return
 
         username = str(users_list[current_index].username)
-        password = Owner().crypt_password(self.password_field.text().strip())
-
-        # Déconnecter tous les utilisateurs actuellement connectés
-        for ow in Owner.select().where(Owner.is_identified == True):
-            ow.is_identified = False
-            ow.save()
+        password = self.password_field.text().strip()
 
         try:
-            owner = Owner.get(Owner.username == username, Owner.password == password)
+            # Vérifier d'abord les identifiants
+            owner = Owner.get(Owner.username == username)
+            
+            if not owner.verify_password(password):
+                print(f"❌ Échec de connexion - Mot de passe incorrect pour: {username}")
+                self.login_error.setText("❌ Identifiants incorrects")
+                field_error(self.password_field, "🔒 Mot de passe incorrect")
+                # Vider le champ de mot de passe pour sécurité
+                self.password_field.clear()
+                self.password_field.setFocus()
+                return False
+            
+            # Déconnecter tous les utilisateurs actuellement connectés
+            Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
             
             # Mettre à jour les informations de connexion
             owner.is_identified = True
@@ -248,13 +256,16 @@ class LoginWidget(FDialog, FWidget):
             owner.login_count += 1
             owner.save()
             
+            # Stocker l'utilisateur connecté
+            self.connected_owner = owner
+            
             # Messages de succès
             user_type = "👑 Administrateur" if owner.group == Owner.ADMIN else "👤 Utilisateur"
             print(f"✅ Connexion réussie - {user_type}: {username}")
             
             self.accept()
         except Owner.DoesNotExist:
-            print(f"❌ Échec de connexion - Mot de passe incorrect pour: {username}")
+            print(f"❌ Échec de connexion - Utilisateur non trouvé: {username}")
             self.login_error.setText("❌ Identifiants incorrects")
             field_error(self.password_field, "🔒 Mot de passe incorrect")
             # Vider le champ de mot de passe pour sécurité

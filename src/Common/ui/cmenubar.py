@@ -31,14 +31,14 @@ class FMenuBar(QMenuBar, FWidget):
         
         # Ajouter les informations de l'utilisateur connecté
         try:
-            ow = Owner.select().where(Owner.is_identified==True)
-            print("jkjjjjj-----", ow.exists())
-            if ow.exists():
-                owner = ow.get()
+            # Récupérer l'utilisateur connecté une seule fois
+            self.connected_owner = Owner.select().where(Owner.is_identified==True).first()
+            
+            if self.connected_owner:
                 # Menu déroulant avec les informations de l'utilisateur
                 user_info = QAction(
                     QIcon(f"{CConstants.img_cmedia}user_active.png"),
-                    f"👤 {owner.username}",
+                    f"👤 {self.connected_owner.username}",
                     self
                 )
                 user_info.setEnabled(False)  # Non cliquable
@@ -50,16 +50,16 @@ class FMenuBar(QMenuBar, FWidget):
                 # Informations détaillées
                 user_details = QAction(
                     QIcon(f"{CConstants.img_cmedia}info.png"),
-                    f"Groupe: {'👑 Admin' if owner.group == Owner.ADMIN else '👤 Utilisateur'}",
+                    f"Groupe: {'👑 Admin' if self.connected_owner.group == Owner.ADMIN else '👤 Utilisateur'}",
                     self
                 )
                 user_details.setEnabled(False)
                 self.user_menu.addAction(user_details)
                 
-                if owner.phone:
+                if self.connected_owner.phone:
                     phone_action = QAction(
                         QIcon(f"{CConstants.img_cmedia}phone.png"),
-                        f"📱 {owner.phone}",
+                        f"📱 {self.connected_owner.phone}",
                         self
                     )
                     phone_action.setEnabled(False)
@@ -68,7 +68,7 @@ class FMenuBar(QMenuBar, FWidget):
                 # Dernière connexion
                 last_login = QAction(
                     QIcon(f"{CConstants.img_cmedia}time.png"),
-                    f"🕒 Dernière connexion: {owner.last_login.strftime('%d/%m/%Y %H:%M')}",
+                    f"🕒 Dernière connexion: {self.connected_owner.last_login.strftime('%d/%m/%Y %H:%M')}",
                     self
                 )
                 last_login.setEnabled(False)

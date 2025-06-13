@@ -49,6 +49,8 @@ try:
 except Exception as e:
     print(e)
 
+from ..cstatic import logger
+
 
 class FMainWindow(QMainWindow):
     """Fenêtre principale moderne avec support complet des thèmes"""
@@ -170,9 +172,12 @@ class FMainWindow(QMainWindow):
 
     def logout(self):
         from ..models import Owner
-        for ur in Owner.select().where(Owner.is_identified):
-            ur.is_identified = False
-            ur.save()
+        try:
+            # Mise à jour atomique de tous les utilisateurs connectés
+            Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
+            logger.info("Déconnexion réussie de tous les utilisateurs")
+        except Exception as e:
+            logger.error(f"Erreur lors de la déconnexion: {e}")
 
 
     def exit(self):   

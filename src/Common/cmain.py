@@ -101,8 +101,9 @@ def handle_initial_conditions(window):
         logger.debug("Paramètres initialisés avec succès")
 
         # Vérification des propriétaires actifs
-        if Owner.select().where(Owner.isactive, Owner.group != Owner.SUPERUSER).count() == 0:
-            logger.debug("Aucun propriétaire actif du groupe Administrateur trouvé, affichage de la vue de restauration")
+        active_owners = Owner.select().where(Owner.isactive, Owner.group != Owner.SUPERUSER)
+        if not active_owners.exists():
+            logger.debug("Aucun propriétaire actif du groupe Administrateur trouvé")
             if RestorationViewWidget().exec_() != QDialog.Accepted:
                 logger.warning("Restauration annulée par l'utilisateur")
                 return False
@@ -111,28 +112,31 @@ def handle_initial_conditions(window):
                 return False
 
         # Vérification des organisations
-        if Organization.select().count() == 0:
-            logger.debug("Aucune organisation trouvée, affichage de la vue de création d'organisation")
+        if not Organization.select().exists():
+            logger.debug("Aucune organisation trouvée")
             if NewOrEditOrganizationViewWidget().exec_() != QDialog.Accepted:
                 logger.warning("Création d'organisation annulée par l'utilisateur")
                 return False
 
         # Vérification de la licence
-        if is_valide_mac()[1] != CConstants.OK:
-            logger.debug("Vérification de la licence")
+        license_status = is_valide_mac()[1]
+        if license_status != CConstants.OK:
+            logger.debug(f"Vérification de la licence - Statut: {license_status}")
             if LicenseViewWidget(parent=None).exec_() != QDialog.Accepted:
                 logger.warning("Activation de la licence annulée par l'utilisateur")
                 return False
 
         # Vérification de la connexion
-        if not settings.auth_required or LoginWidget().exec_() != QDialog.Accepted:
-            logger.info("Affichage de la fenêtre principale maximisée")
-            window.showMaximized()
-            return True
+        if settings.auth_required:
+            logger.debug("Authentification requise")
+            if LoginWidget().exec_() != QDialog.Accepted:
+                logger.warning("Connexion annulée ou échouée")
+                return False
+            logger.info("Authentification réussie")
         else:
-            logger.debug("Aucun login requis")
+            logger.debug("Aucune authentification requise")
         
-        logger.info("Authentification réussie, affichage de la fenêtre principale maximisée")
+        logger.info("Toutes les conditions initiales sont satisfaites")
         window.showMaximized()
         return True
 
