@@ -264,6 +264,10 @@ class CommonMainWindow(FMainWindow):
         return self.width() - 100
 
     def exit(self):
-        logger.info("Fermeture de l'application")
-        self.logout()
-        self.close() 
+        logger.info("Fermeture de l'application")   
+        from ..models import Settings
+        settings = Settings.get(id=1)
+        if not settings.is_login:
+            self.logout()
+        else:
+            self.close()

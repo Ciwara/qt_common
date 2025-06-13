@@ -21,10 +21,8 @@ from PyQt5.QtGui import (
     QPixmap,
     QRadialGradient,
     QFontMetrics,
-    QLinearGradient,
 )
 from PyQt5.QtWidgets import (
-    QApplication,
     QComboBox,
     QCommandLinkButton,
     QCompleter,
@@ -40,7 +38,6 @@ from PyQt5.QtWidgets import (
     QWidget,
     QFrame,
     QVBoxLayout,
-    QHBoxLayout,
     QGraphicsDropShadowEffect,
 )
 
@@ -106,7 +103,7 @@ class FMainWindow(QMainWindow):
     def _setup_theme_system(self):
         """Configuration du système de thèmes"""
         try:
-            from .themes.styles import get_theme_style, get_available_themes
+            from .themes.styles import get_available_themes
             self.available_themes = get_available_themes()
             self.apply_theme(self.current_theme)
         except ImportError:
@@ -176,6 +173,19 @@ class FMainWindow(QMainWindow):
         for ur in Owner.select().where(Owner.islog):
             ur.islog = False
             ur.save()
+
+
+    def exit(self):   
+        print("Fermeture de l'application")
+        from ..models import Settings
+        print("settings", Settings.select().where(Settings.id == 1).first())
+        settings = Settings.select().where(Settings.id == 1).first()
+        if not settings.is_login:
+            print("logout")
+            self.logout()
+        import sys
+        self.close()
+        sys.exit(0)
 
     def Notify(self, mssg="👋 Bonjour", type_mssg="info"):
         """Affiche une notification moderne avec émojis"""
