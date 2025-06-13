@@ -238,14 +238,45 @@ class LoginWidget(FDialog, FWidget):
             # Vérifier d'abord les identifiants
             owner = Owner.get(Owner.username == username)
             
+            # Vérifier si l'utilisateur n'est pas bloqué
+            if not owner.check_login_attempts():
+                remaining_time = owner.get_remaining_lockout_time()
+                minutes = int(remaining_time / 60)
+                seconds = int(remaining_time % 60)
+                self.login_error.setText(
+                    f"🔒 Compte temporairement bloqué\n"
+                    f"Veuillez réessayer dans {minutes} minutes et {seconds} secondes"
+                )
+                return False
+            
             if not owner.verify_password(password):
-                print(f"❌ Échec de connexion - Mot de passe incorrect pour: {username}")
-                self.login_error.setText("❌ Identifiants incorrects")
+                # Incrémenter le compteur de tentatives
+                owner.increment_login_attempts()
+                
+                # Vérifier si l'utilisateur est maintenant bloqué
+                if not owner.check_login_attempts():
+                    remaining_time = owner.get_remaining_lockout_time()
+                    minutes = int(remaining_time / 60)
+                    seconds = int(remaining_time % 60)
+                    self.login_error.setText(
+                        f"🔒 Trop de tentatives échouées\n"
+                        f"Compte bloqué pour {minutes} minutes et {seconds} secondes"
+                    )
+                else:
+                    remaining = owner.MAX_LOGIN_ATTEMPTS - owner.login_attempts
+                    self.login_error.setText(
+                        f"❌ Identifiants incorrects\n"
+                        f"Il vous reste {remaining} tentative(s)"
+                    )
+                
                 field_error(self.password_field, "🔒 Mot de passe incorrect")
                 # Vider le champ de mot de passe pour sécurité
                 self.password_field.clear()
                 self.password_field.setFocus()
                 return False
+            
+            # Réinitialiser les tentatives de connexion
+            owner.reset_login_attempts()
             
             # Déconnecter tous les utilisateurs actuellement connectés
             Owner.update(is_identified=False).where(Owner.is_identified == True).execute()

@@ -192,6 +192,11 @@ class Owner(BaseModel):
     last_login = peewee.DateTimeField(default=NOW)
     login_count = peewee.IntegerField(default=0)
 
+    # Constantes pour la gestion des sessions
+    SESSION_TIMEOUT = 30 * 60  # 30 minutes en secondes
+    MAX_LOGIN_ATTEMPTS = 5
+    LOCKOUT_DURATION = 15 * 60  # 15 minutes en secondes
+
     def data(self):
         return {
             "username": self.username,
@@ -273,6 +278,53 @@ class Owner(BaseModel):
     def get_active_non_superusers(cls):
         """Retourne tous les propriétaires actifs sauf les superusers"""
         return cls.select().where(cls.isactive, cls.group != cls.SUPERUSER)
+
+    def is_session_valid(self):
+        """Vérifie si la session est toujours valide"""
+        if not self.is_identified or not self.last_login:
+            return False
+            
+        # Calculer le temps écoulé depuis la dernière connexion
+        elapsed_time = (datetime.now() - self.last_login).total_seconds()
+        return elapsed_time < self.SESSION_TIMEOUT
+
+    def check_login_attempts(self):
+        """Vérifie si l'utilisateur n'est pas bloqué suite à trop de tentatives"""
+        if not hasattr(self, 'login_attempts'):
+            self.login_attempts = 0
+            self.last_attempt = None
+            
+        # Réinitialiser les tentatives si le temps de blocage est écoulé
+        if self.last_attempt and (datetime.now() - self.last_attempt).total_seconds() > self.LOCKOUT_DURATION:
+            self.login_attempts = 0
+            self.last_attempt = None
+            
+        return self.login_attempts < self.MAX_LOGIN_ATTEMPTS
+
+    def increment_login_attempts(self):
+        """Incrémente le compteur de tentatives de connexion"""
+        if not hasattr(self, 'login_attempts'):
+            self.login_attempts = 0
+            self.last_attempt = None
+            
+        self.login_attempts += 1
+        self.last_attempt = datetime.now()
+        self.save()
+
+    def reset_login_attempts(self):
+        """Réinitialise le compteur de tentatives de connexion"""
+        self.login_attempts = 0
+        self.last_attempt = None
+        self.save()
+
+    def get_remaining_lockout_time(self):
+        """Retourne le temps restant avant la fin du blocage"""
+        if not self.last_attempt:
+            return 0
+            
+        elapsed = (datetime.now() - self.last_attempt).total_seconds()
+        remaining = self.LOCKOUT_DURATION - elapsed
+        return max(0, remaining)
 
 
 class Organization(BaseModel):

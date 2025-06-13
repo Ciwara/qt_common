@@ -3,7 +3,7 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QMainWindow, 
@@ -218,6 +218,11 @@ class CommonMainWindow(FMainWindow):
             else:
                 logger.info(f"Utilisateur déjà connecté: {connected_owner.username}")
 
+        # Initialiser le timer de vérification de session
+        self.session_timer = QTimer(self)
+        self.session_timer.timeout.connect(self.check_session)
+        self.session_timer.start(60000)  # Vérifier toutes les minutes
+
         self.toolBar = QToolBar()
         self.addToolBar(Qt.LeftToolBarArea, self.toolBar)
 
@@ -261,6 +266,24 @@ class CommonMainWindow(FMainWindow):
         self.change_context(self.page)
         logger.debug("Contexte initial changé vers ExamplePageWidget")
         
+    def check_session(self):
+        """Vérifie la validité de la session active"""
+        from ..models import Owner, Settings
+        settings = Settings.select().where(Settings.id == 1).first()
+        
+        if settings and settings.auth_required:
+            connected_owner = Owner.select().where(Owner.is_identified == True).first()
+            if connected_owner and not connected_owner.is_session_valid():
+                logger.warning(f"Session expirée pour l'utilisateur: {connected_owner.username}")
+                self.logout()
+                from .login import LoginWidget
+                login_widget = LoginWidget()
+                if login_widget.exec_() != QDialog.Accepted:
+                    logger.warning("Reconnexion annulée ou échouée")
+                    self.close()
+                    return
+                logger.info(f"Utilisateur reconnecté: {login_widget.connected_owner.username}")
+
     def closeEvent(self, event):
         """Override closeEvent pour nettoyer les threads avant fermeture"""
         try:
@@ -275,6 +298,9 @@ class CommonMainWindow(FMainWindow):
                 if hasattr(self.updater, 'cleanup'):
                     self.updater.cleanup()
                     
+            # Arrêter le timer de session
+            if hasattr(self, 'session_timer'):
+                self.session_timer.stop()
         except Exception as e:
             logger.error(f"Erreur lors du nettoyage de la fenêtre principale: {e}")
         finally:
