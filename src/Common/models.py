@@ -191,6 +191,8 @@ class Owner(BaseModel):
     isactive = peewee.BooleanField(default=True)
     last_login = peewee.DateTimeField(default=NOW)
     login_count = peewee.IntegerField(default=0)
+    reset_token = peewee.CharField(max_length=64, null=True)
+    reset_token_expiry = peewee.DateTimeField(null=True)
 
     # Constantes pour la gestion des sessions
     SESSION_TIMEOUT = 30 * 60  # 30 minutes en secondes
@@ -207,6 +209,8 @@ class Owner(BaseModel):
             "isactive": self.isactive,
             "last_login": datetime_to_str(self.last_login),
             "login_count": self.login_count,
+            "reset_token": self.reset_token,
+            "reset_token_expiry": datetime_to_str(self.reset_token_expiry),
         }
 
     def __str__(self):
@@ -325,6 +329,57 @@ class Owner(BaseModel):
         elapsed = (datetime.now() - self.last_attempt).total_seconds()
         remaining = self.LOCKOUT_DURATION - elapsed
         return max(0, remaining)
+
+    def generate_reset_token(self):
+        """Génère un token de réinitialisation de mot de passe"""
+        import secrets
+        import string
+        
+        # Générer un token aléatoire de 32 caractères
+        alphabet = string.ascii_letters + string.digits
+        token = ''.join(secrets.choice(alphabet) for _ in range(32))
+        
+        # Stocker le token et sa date d'expiration (1 heure)
+        self.reset_token = token
+        self.reset_token_expiry = datetime.now() + timedelta(hours=1)
+        self.save()
+        
+        return token
+
+    def verify_reset_token(self, token):
+        """Vérifie si le token de réinitialisation est valide"""
+        if not hasattr(self, 'reset_token') or not hasattr(self, 'reset_token_expiry'):
+            return False
+            
+        if not self.reset_token or not self.reset_token_expiry:
+            return False
+            
+        # Vérifier si le token correspond et n'est pas expiré
+        is_valid = (
+            self.reset_token == token and 
+            datetime.now() < self.reset_token_expiry
+        )
+        
+        # Si le token est valide, le supprimer
+        if is_valid:
+            self.reset_token = None
+            self.reset_token_expiry = None
+            self.save()
+            
+        return is_valid
+
+    def reset_password(self, new_password):
+        """Réinitialise le mot de passe de l'utilisateur"""
+        # Valider le nouveau mot de passe
+        is_valid, message = self.validate_password(new_password)
+        if not is_valid:
+            return False, message
+            
+        # Hacher et sauvegarder le nouveau mot de passe
+        self.password = self.crypt_password(new_password)
+        self.save()
+        
+        return True, "Mot de passe réinitialisé avec succès"
 
 
 class Organization(BaseModel):

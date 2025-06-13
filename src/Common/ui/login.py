@@ -15,6 +15,7 @@ from .common import (
     FormLabel,
     FWidget,
     LineEdit,
+    Button,
 )
 from .util import check_is_empty, field_error
 
@@ -175,6 +176,13 @@ class LoginWidget(FDialog, FWidget):
         formbox.addRow(FormLabel(""), self.login_button)
         formbox.addRow(FormLabel(""), self.cancel_button)
         formbox.addRow(FormLabel(""), self.login_error)
+        
+        # Ajout du bouton de réinitialisation
+        self.reset_button = Button("🔑 Mot de passe oublié ?")
+        self.reset_button.setToolTip("Cliquez ici si vous avez oublié votre mot de passe")
+        self.reset_button.clicked.connect(self.show_reset_dialog)
+        formbox.addRow(FormLabel(""), self.reset_button)
+        
         if self.hibernate:
             self.cancel_button.setEnabled(False)
             self.cancel_button.setToolTip("❄️ Mode hibernation - Fermeture désactivée")
@@ -307,3 +315,9 @@ class LoginWidget(FDialog, FWidget):
             print(f"❌ Erreur de connexion: {e}")
             self.login_error.setText("❌ Erreur de connexion système")
             return False
+
+    def show_reset_dialog(self):
+        """Affiche la fenêtre de réinitialisation de mot de passe"""
+        from .reset_password import ResetPasswordWidget
+        dialog = ResetPasswordWidget(self)
+        dialog.exec_()
