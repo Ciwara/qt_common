@@ -18,6 +18,8 @@ from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
 from .ui.restoration_view import RestorationViewWidget
+from .migrations import run_migrations
+from .migrations.migration_tracker import MigrationTracker
 
 from .ui.user_add_or_edit import NewOrEditUserViewWidget
 from .ui.util import is_valide_mac
@@ -41,6 +43,51 @@ def setup_localization():
     locale.setlocale(locale.LC_ALL, "")
     gettext.install("main.py", localedir="locale")
     logger.debug("Localisation configurée avec succès")
+
+def check_and_run_migrations():
+    """Vérifie et exécute les migrations nécessaires"""
+    try:
+        logger.info("🔍 Vérification des migrations nécessaires")
+        
+        # Vérifier que la base de données est initialisée
+        if not init_database():
+            logger.error("❌ Impossible d'initialiser la base de données")
+            return False
+            
+        # Vérifier la connexion à la base de données
+        if dbh is None:
+            logger.error("❌ La base de données n'est pas initialisée")
+            return False
+            
+        if dbh.is_closed():
+            logger.info("🔄 Connexion à la base de données")
+            try:
+                dbh.connect()
+            except Exception as e:
+                logger.error(f"❌ Erreur lors de la connexion à la base de données: {e}")
+                return False
+                
+        logger.info("✅ Connexion à la base de données établie")
+        if not MigrationTracker.migrate():
+            logger.error("❌ Échec de la migration du système de suivi")
+            return False
+            
+        # Exécuter les migrations
+        if run_migrations():
+            logger.info("✅ Migrations vérifiées et appliquées avec succès")
+            return True
+        else:
+            logger.error("❌ Erreur lors de l'exécution des migrations")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la vérification des migrations: {e}")
+        return False
+    finally:
+        # Fermer la connexion à la base de données
+        if dbh is not None and not dbh.is_closed():
+            dbh.close()
+            logger.info("✅ Connexion à la base de données fermée")
 
 def initialize_main_window():   
     """Tentative d'initialisation de la fenêtre principale (externe)"""
@@ -164,6 +211,11 @@ def cmain(test=False):
         if dbh.is_closed():
             logger.info("Connexion à la base de données")
             dbh.connect()
+        
+        # Vérification et exécution des migrations
+        if not check_and_run_migrations():
+            logger.error("Impossible de vérifier ou d'appliquer les migrations")
+            return False
         
         setup_localization()
         
