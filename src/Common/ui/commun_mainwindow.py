@@ -6,7 +6,6 @@
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QMainWindow, 
     QToolBar, 
     QVBoxLayout, 
     QHBoxLayout, 

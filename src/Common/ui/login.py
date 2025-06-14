@@ -44,14 +44,19 @@ class LoginWidget(FDialog, FWidget):
         )
         vbox = QHBoxLayout()
 
+        # Créer d'abord les champs de connexion
         self.loginUserGroupBox()
+        
+        # Ajouter les widgets au layout
         vbox.addWidget(self.title)
         vbox.addWidget(self.topLeftGroupBox)
         
+        # Définir le layout
+        self.setLayout(vbox)
+        
         # Définir le focus APRÈS la création des champs
         if hasattr(self, 'password_field') and self.password_field:
-            self.setFocusProxy(self.password_field)
-        self.setLayout(vbox)
+            self.password_field.setFocus()
 
     def loginUserGroupBox(self):
         self.topLeftGroupBox = QGroupBox(self.tr("🔐 Authentification"))
@@ -104,7 +109,7 @@ class LoginWidget(FDialog, FWidget):
                 box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
             }
         """)
-        self.password_field.setFocus()
+
         # Login button moderne
         self.login_button = QPushButton("🔐 &Se connecter")
         self.login_button.setIcon(
@@ -156,16 +161,6 @@ class LoginWidget(FDialog, FWidget):
 
         # Login error amélioré
         self.login_error = ErrorLabel("")
-        # self.login_error.setStyleSheet("""
-        #     QLabel {
-        #         color: #dc3545;
-        #         background-color: #f8d7da;
-        #         border: 1px solid #f5c6cb;
-        #         border-radius: 6px;
-        #         padding: 8px 12px;
-        #         font-weight: 500;
-        #     }
-        # """)
 
         formbox = QFormLayout()
         formbox.setSpacing(16)
