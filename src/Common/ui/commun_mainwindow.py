@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QFormLayout,
     QMessageBox,
-    QDialog
+    QMainWindow,
+    QDockWidget
 )
 
 from ..cstatic import CConstants, logger
@@ -26,6 +27,8 @@ from .cmenutoolbar import FMenuToolBar
 from .common import FMainWindow, FWidget
 from .statusbar import GStatusBar
 from ..updater import UpdaterInit
+from .window import FWindow
+from .login import LoginWidget
 
 
 class TestViewWidget(FWidget):
@@ -191,32 +194,16 @@ class ExamplePageWidget(FWidget):
         logger.info("Information affichée dans ExamplePageWidget")
 
 
-class CommonMainWindow(FMainWindow):
+class CommonMainWindow(QMainWindow, FWindow):
     def __init__(self, parent=None, *args, **kwargs):
-        FMainWindow.__init__(self, parent=parent, *args, **kwargs)
+        super().__init__(parent=parent, *args, **kwargs)
 
         self.setWindowIcon(QIcon(f"{CConstants.APP_LOGO}"))
         self.setWindowTitle(f"{CConstants.APP_NAME} {CConstants.APP_VERSION}")
 
         # Vérifier si un utilisateur est connecté
-        from ..models import Owner, Settings
-        settings = Settings.select().where(Settings.id == 1).first()
-        
-        if settings and settings.auth_required:
-            # Vérifier si un utilisateur est connecté
-            connected_owner = Owner.select().where(Owner.is_identified == True).first()
-            if not connected_owner:
-                logger.warning("Aucun utilisateur connecté")
-                from .login import LoginWidget
-                login_widget = LoginWidget()
-                if login_widget.exec_() != QDialog.Accepted:
-                    logger.warning("Connexion annulée ou échouée")
-                    self.close()
-                    return
-                logger.info(f"Utilisateur connecté: {login_widget.connected_owner.username}")
-            else:
-                logger.info(f"Utilisateur déjà connecté: {connected_owner.username}")
 
+     
         # Initialiser le timer de vérification de session
         self.session_timer = QTimer(self)
         self.session_timer.timeout.connect(self.check_session)
@@ -275,13 +262,7 @@ class CommonMainWindow(FMainWindow):
             if connected_owner and not connected_owner.is_session_valid():
                 logger.warning(f"Session expirée pour l'utilisateur: {connected_owner.username}")
                 self.logout()
-                from .login import LoginWidget
-                login_widget = LoginWidget()
-                if login_widget.exec_() != QDialog.Accepted:
-                    logger.warning("Reconnexion annulée ou échouée")
-                    self.close()
-                    return
-                logger.info(f"Utilisateur reconnecté: {login_widget.connected_owner.username}")
+                self.show_login_dialog()
 
     def closeEvent(self, event):
         """Override closeEvent pour nettoyer les threads avant fermeture"""
@@ -308,11 +289,98 @@ class CommonMainWindow(FMainWindow):
     def page_width(self):
         return self.width() - 100
 
-    # def exit(self):
-    #     logger.info("Fermeture de l'application")   
-    #     from ..models import Settings
-    #     settings = Settings.get(id=1)
-    #     if not settings.auth_required:
-    #         self.logout()
-    #     else:
-    #         self.close()
+    def show_login_dialog(self):
+        """Affiche la boîte de dialogue de connexion"""
+        login_dialog = LoginWidget(self)
+        # Connecter le signal de connexion réussie
+        login_dialog.login_successful.connect(lambda: self.refresh_interface())
+        return login_dialog.exec_()
+
+    def refresh_menu_bar(self):
+        """Rafraîchit la barre de menu après la connexion"""
+        # Supprimer les menus existants
+        self.menubar.clear()
+        
+        # Recréer les menus avec les permissions mises à jour
+        self.create_menus()
+
+    def refresh_interface(self):
+        """Rafraîchit l'interface complète après la connexion"""
+        try:
+            # Rafraîchir la barre de menu
+            self.refresh_menu_bar()
+            
+            # Rafraîchir la barre de statut
+            if hasattr(self, 'status_bar'):
+                self.status_bar.refresh()
+            
+            # Rafraîchir le widget central si nécessaire
+            if hasattr(self, 'central_widget'):
+                self.central_widget.refresh()
+            
+            # Rafraîchir les dock widgets si présents
+            for dock in self.findChildren(QDockWidget):
+                if hasattr(dock.widget(), 'refresh'):
+                    dock.widget().refresh()
+            
+            # Forcer la mise à jour de l'interface
+            self.update()
+            
+            logger.info("✅ Interface rafraîchie avec succès")
+        except Exception as e:
+            logger.error(f"❌ Erreur lors du rafraîchissement de l'interface: {e}")
+
+    def change_context(self, context=None):
+        """Change le contexte de l'application"""
+        try:
+            if context:
+                self.current_context = context
+                logger.info(f"✅ Contexte changé: {context}")
+                
+                # Rafraîchir l'interface avec le nouveau contexte
+                self.refresh_interface()
+                
+                # Mettre à jour la barre de statut si elle existe
+                if hasattr(self, 'status_bar'):
+                    self.status_bar.set_context(context)
+                    
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"❌ Erreur lors du changement de contexte: {e}")
+            return False
+
+    def create_menus(self):
+        """Crée les menus de la barre de menu"""
+        # Menu Fichier
+        file_menu = self.menubar.addMenu("📁 Fichier")
+        file_menu.addAction("🆕 Nouveau")
+        file_menu.addAction("📂 Ouvrir")
+        file_menu.addAction("💾 Enregistrer")
+        file_menu.addSeparator()
+        file_menu.addAction("🚪 Quitter")
+        
+        # Menu Édition
+        edit_menu = self.menubar.addMenu("✏️ Édition")
+        edit_menu.addAction("↩️ Annuler")
+        edit_menu.addAction("↪️ Rétablir")
+        edit_menu.addSeparator()
+        edit_menu.addAction("✂️ Couper")
+        edit_menu.addAction("📋 Copier")
+        edit_menu.addAction("📝 Coller")
+        
+        # Menu Affichage
+        view_menu = self.menubar.addMenu("👁️ Affichage")
+        view_menu.addAction("🔍 Zoom avant")
+        view_menu.addAction("🔍 Zoom arrière")
+        view_menu.addAction("🔍 Zoom par défaut")
+        
+        # Menu Outils
+        tools_menu = self.menubar.addMenu("🛠️ Outils")
+        tools_menu.addAction("⚙️ Préférences")
+        tools_menu.addAction("🔄 Rafraîchir")
+        
+        # Menu Aide
+        help_menu = self.menubar.addMenu("❓ Aide")
+        help_menu.addAction("📚 Documentation")
+        help_menu.addAction("ℹ️ À propos")

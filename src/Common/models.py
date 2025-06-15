@@ -3,8 +3,6 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
-
-import hashlib
 import os
 import sys
 import time

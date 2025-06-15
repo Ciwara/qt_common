@@ -224,26 +224,20 @@ def cmain(test=False):
 
         if test:
             window = initialize_common_main_window()
-            logger.info("Fenêtre principale Common utilisée")
         else:
             window = initialize_main_window()
-            logger.info("Fenêtre principale externe utilisée")
 
         if window is None:
             logger.error("Aucune fenêtre n'a pu être initialisée")
             return False
 
         if CConstants.DEBUG or test:
-            logger.info("Mode debug activé")
             window.showMaximized()
-            print("Debug is True")
             return app.exec_()
 
         if handle_initial_conditions(window):
-            logger.info("Application démarrée avec succès")
             return app.exec_()
 
-        logger.warning("L'application n'a pas pu démarrer correctement")
         return False
 
     except Exception as e:
