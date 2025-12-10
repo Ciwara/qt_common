@@ -58,10 +58,6 @@ class FMainWindow(QMainWindow):
     def __init__(self, parent=None, *args, **kwargs):
         QMainWindow.__init__(self)
         
-        # Configuration de base
-        self._setup_window()
-        self._setup_animations()
-        
         # Configuration existante
         try:
             self.setWindowIcon(
@@ -80,28 +76,6 @@ class FMainWindow(QMainWindow):
         self.wc = self.width()
         self.hc = self.height()
         self.resize(self.wc, self.hc)
-        
-    def _setup_window(self):
-        """Configuration moderne de la fenêtre"""
-        # Fenêtre moderne avec coins arrondis sur les systèmes supportés
-        self.setMinimumSize(800, 600)
-        
-        # Ombres modernes pour la fenêtre
-        if hasattr(self, 'setWindowFlag'):
-            try:
-                shadow = QGraphicsDropShadowEffect()
-                shadow.setBlurRadius(20)
-                shadow.setColor(QColor(0, 0, 0, 60))
-                shadow.setOffset(0, 10)
-                # Note: L'ombre de fenêtre est gérée par l'OS moderne
-            except Exception:
-                pass
-                
-    def _setup_animations(self):
-        """Configuration des animations modernes"""
-        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_animation.setDuration(300)
-        self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
         
 
     def set_window_title(self, page_name):
@@ -149,8 +123,15 @@ class FMainWindow(QMainWindow):
         self.close()
         sys.exit(0)
 
-    def Notify(self, mssg="👋 Bonjour", type_mssg="info"):
-        """Affiche une notification moderne avec émojis"""
+    def Notify(self, mssg="👋 Bonjour", type_mssg="info", duration=5000):
+        """
+        Affiche une notification moderne avec émojis
+        
+        Args:
+            mssg: Message à afficher
+            type_mssg: Type de notification (success, error, warning, info)
+            duration: Durée d'affichage en millisecondes (0 = permanent, défaut: 5000ms)
+        """
         from ..notification import Notification
 
         # Ajouter des émojis selon le type de message
@@ -166,7 +147,7 @@ class FMainWindow(QMainWindow):
             else:
                 mssg = f"🔔 {mssg}"
 
-        self.notify = Notification(mssg=mssg, type_mssg=type_mssg)
+        self.notify = Notification(mssg=mssg, type_mssg=type_mssg, duration=duration)
 
 
 class FWidget(QWidget):
