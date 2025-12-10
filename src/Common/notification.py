@@ -97,16 +97,9 @@ class ModernNotification(QWidget):
         self.setLayout(layout)
     
     def _setup_style(self):
-        """Configure le style selon le type de message et le thème"""
-        # Récupérer le thème actuel
-        try:
-            from .ui.themes.manager import get_theme_manager
-            theme_manager = get_theme_manager()
-            current_theme = theme_manager.get_current_theme()
-            is_dark = "dark" in current_theme.lower()
-        except Exception:
-            # Fallback si le système de thème n'est pas disponible
-            is_dark = False
+        """Configure le style selon le type de message"""
+        # Mode clair par défaut
+        is_dark = False
         
         # Couleurs selon le type et le thème
         if is_dark:

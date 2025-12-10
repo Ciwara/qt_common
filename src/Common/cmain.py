@@ -25,7 +25,6 @@ from PyQt5.QtWidgets import QDialog, QApplication
 from . import gettext_windows
 from .cstatic import CConstants, logger
 from .models import Organization, Owner, Settings, init_database, dbh
-from .ui.themes.manager import get_theme_manager
 from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
@@ -107,7 +106,6 @@ def initialize_main_window():
         from ui.mainwindow import MainWindow
         logger.info("Initialisation de la fenêtre principale externe")
         window = MainWindow()
-        apply_global_theme()
         setattr(FWindow, "window", window)
         logger.debug("Fenêtre principale externe initialisée")
         return window
@@ -120,41 +118,10 @@ def initialize_common_main_window():
     from .ui.commun_mainwindow import CommonMainWindow
     logger.info("Initialisation de la fenêtre principale du module Common")
     window = CommonMainWindow()
-    apply_global_theme()
     setattr(FWindow, "window", window)
     logger.debug("Fenêtre principale Common initialisée")
     return window
 
-def apply_global_theme():
-    """Applique le thème à toute l'application"""
-    try:
-        # Utiliser le nouveau système de thèmes centralisé
-        theme_manager = get_theme_manager()
-        
-        # Récupérer le thème actuel (qui sera "system" par défaut)
-        current_theme = theme_manager.get_current_theme()
-        
-        # Appliquer le thème
-        theme_manager.apply_theme_to_application(current_theme)
-        logger.info(f"Thème '{current_theme}' appliqué globalement à toute l'application")
-    except ImportError:
-        # Fallback vers l'ancien système
-        logger.debug("theme_manager non disponible, utilisation du fallback")
-        fallback_theme_application()
-    except Exception as e:
-        logger.warning(f"Erreur lors de l'application du thème global: {e}")
-        fallback_theme_application()
-
-def fallback_theme_application():
-    """Application de fallback du thème en cas d'erreur"""
-    try:
-        from PyQt5.QtWidgets import QApplication
-        app = QApplication.instance()
-        if app:
-            # app.setStyleSheet(theme)
-            logger.info("Thème appliqué via fallback à toute l'application")
-    except Exception as e:
-        logger.error(f"Erreur lors de l'application du thème fallback: {e}")
 
 def handle_initial_conditions(window):
     logger.info("Vérification des conditions initiales")

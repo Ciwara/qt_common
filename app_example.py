@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Application d'exemple pour tester les fonctionnalités du module Common
-Utilise cmain() pour démarrer l'application avec le thème système par défaut
+Utilise cmain() pour démarrer l'application
 
 Auteur: Fad
 Version: 1.0
@@ -21,7 +21,6 @@ def main():
     
     Cette fonction :
     - Initialise l'application PyQt5 via cmain()
-    - Utilise le thème système par défaut (détection automatique clair/sombre)
     - Affiche la fenêtre principale du module Common
     - Gère toutes les initialisations nécessaires (BDD, migrations, etc.)
     """
@@ -30,13 +29,10 @@ def main():
     print("=" * 60)
     print()
     print("📝 Fonctionnalités testées :")
-    print("   ✅ Thème système (détection automatique clair/sombre)")
     print("   ✅ Base de données SQLite")
     print("   ✅ Migrations automatiques")
-    print("   ✅ Interface utilisateur moderne")
+    print("   ✅ Interface utilisateur")
     print("   ✅ Gestion des utilisateurs et organisations")
-    print()
-    print("🎨 Thème par défaut : Système (suit les préférences OS)")
     print()
     print("-" * 60)
     print()
@@ -54,9 +50,7 @@ def main():
         # Lancer l'application en mode test (pour bypasser les vérifications de licence/login)
         # cmain(test=True) permet de démarrer directement sans authentification
         print("⚙️  Initialisation de l'application...")
-        print("   → Configuration des thèmes...")
         print("   → Initialisation de la base de données...")
-        print("   → Application du thème système...")
         print()
         
         # Lancer l'application
@@ -106,7 +100,6 @@ if __name__ == "__main__":
         python app_example.py
     
     L'application utilisera automatiquement :
-    - Le thème système (détection clair/sombre selon l'OS)
     - La base de données locale (database.db)
     - Toutes les fonctionnalités du module Common
     """

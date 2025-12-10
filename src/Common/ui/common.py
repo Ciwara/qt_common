@@ -53,18 +53,13 @@ from ..cstatic import logger
 
 
 class FMainWindow(QMainWindow):
-    """Fenêtre principale moderne avec support complet des thèmes"""
-    
-    themeChanged = pyqtSignal(str)  # Signal émis lors du changement de thème
+    """Fenêtre principale"""
     
     def __init__(self, parent=None, *args, **kwargs):
         QMainWindow.__init__(self)
-        print("🚀 FMainWindow v3.0 - Mode moderne activé avec succès")
         
         # Configuration de base
-        self.current_theme = "light_modern"  # Thème par défaut
         self._setup_window()
-        self._setup_theme_system()
         self._setup_animations()
         
         # Configuration existante
@@ -102,50 +97,12 @@ class FMainWindow(QMainWindow):
             except Exception:
                 pass
                 
-    def _setup_theme_system(self):
-        """Configuration du système de thèmes"""
-        try:
-            from .themes.config import get_available_themes
-            self.available_themes = get_available_themes()
-            self.apply_theme(self.current_theme)
-        except ImportError:
-            print("🎨 Système de thèmes non disponible - utilisation du style par défaut")
-            
     def _setup_animations(self):
         """Configuration des animations modernes"""
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setDuration(300)
         self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
         
-    def apply_theme(self, theme_key: str):
-        """Applique un thème moderne à la fenêtre"""
-        try:
-            from .themes.styles import get_theme_style
-            style = get_theme_style(theme_key)
-            self.setStyleSheet(style)
-            self.current_theme = theme_key
-            self.themeChanged.emit(theme_key)
-            print(f"🎨 Thème appliqué avec succès: {theme_key}")
-            
-            # Appliquer le thème à tous les widgets enfants
-            self._apply_theme_to_children()
-            
-        except Exception as e:
-            print(f"❌ Erreur lors de l'application du thème {theme_key}: {e}")
-            
-    def _apply_theme_to_children(self):
-        """Applique le thème à tous les widgets enfants"""
-        for widget in self.findChildren(QWidget):
-            if hasattr(widget, 'apply_theme'):
-                widget.apply_theme(self.current_theme)
-                
-    def get_current_theme(self) -> str:
-        """Retourne le thème actuel"""
-        return self.current_theme
-        
-    def get_available_themes(self) -> dict:
-        """Retourne les thèmes disponibles"""
-        return getattr(self, 'available_themes', {})
 
     def set_window_title(self, page_name):
         self.setWindowTitle(" > ".join([CConstants.APP_NAME, page_name]))
@@ -213,48 +170,11 @@ class FMainWindow(QMainWindow):
 
 
 class FWidget(QWidget):
-    """Widget de base moderne avec support des thèmes"""
+    """Widget de base"""
     
     def __init__(self, parent=None, *args, **kwargs):
         QWidget.__init__(self, parent=parent, *args, **kwargs)
         self.pp = parent
-        self.current_theme = "light_modern"
-        
-        # Auto-application du thème si le parent en a un
-        self._inherit_parent_theme()
-        
-        # Configuration moderne
-        self._setup_modern_features()
-
-    def _inherit_parent_theme(self):
-        """Hérite automatiquement du thème du parent"""
-        if hasattr(self.pp, 'get_current_theme'):
-            try:
-                self.current_theme = self.pp.get_current_theme()
-                self.apply_theme(self.current_theme)
-            except Exception as e:
-                print(f"⚠️ Erreur lors de l'héritage du thème: {e}")
-
-    def _setup_modern_features(self):
-        """Configuration des fonctionnalités modernes"""
-        # Activation des effets visuels modernes
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-    def apply_theme(self, theme_key: str):
-        """Applique un thème à ce widget"""
-        try:
-            from .themes.styles import get_theme_style
-            # S'assurer que current_theme existe
-            if not hasattr(self, 'current_theme'):
-                self.current_theme = "light_modern"
-            # Appliquer seulement si le thème a changé
-            if theme_key != self.current_theme:
-                style = get_theme_style(theme_key)
-                self.setStyleSheet(style)
-                self.current_theme = theme_key
-                self.update()  # Force le rafraîchissement visuel
-        except Exception as e:
-            print(f"❌ Erreur lors de l'application du thème au widget: {e}")
 
     def page_names(self, app_name, txt):
         self.parentWidget().setWindowTitle("{} | {}".format(app_name, txt.upper()))
@@ -270,38 +190,16 @@ class FWidget(QWidget):
     def open_dialog(self, dialog, modal=False, *args, **kwargs):
         return self.parentWidget().open_dialog(dialog, modal=modal, *args, **kwargs)
         
-    def get_current_theme(self) -> str:
-        """Retourne le thème actuel du widget"""
-        if not hasattr(self, 'current_theme'):
-            self.current_theme = "light_modern"
-        return self.current_theme
 
 
 class FDialog(QDialog, FWidget):
     def __init__(self, parent=None, *args, **kwargs):
         QDialog.__init__(self, parent=parent, *args, **kwargs)
         
-        # S'assurer que le dialogue hérite automatiquement du thème de l'application
-        self.ensure_theme_inheritance()
 
     def page_names(self, app_name, txt):
         self.setWindowTitle("{} | {}".format(app_name, txt.upper()))
     
-    def ensure_theme_inheritance(self):
-        """S'assure que ce dialogue hérite du thème de l'application"""
-        try:
-            from .theme_utils import ensure_dialog_theme_inheritance
-            ensure_dialog_theme_inheritance(self)
-        except ImportError:
-            # Si theme_utils n'est pas disponible, essayer d'hériter du style de l'application
-            try:
-                from PyQt5.QtWidgets import QApplication
-                app = QApplication.instance()
-                if app and app.styleSheet():
-                    # Le dialogue hérite automatiquement, mais on force le rafraîchissement
-                    self.update()
-            except Exception:
-                pass  # Ignorer silencieusement les erreurs pour ne pas casser l'application
 
 
 class PyTextViewer(QTextEdit):
@@ -513,72 +411,13 @@ class QToolBadgeButton(QToolButton):
 
 
 class Button(QCommandLinkButton):
-    """Bouton de base amélioré avec support des thèmes"""
+    """Bouton de base"""
     
     def __init__(self, *args, **kwargs):
         super(Button, self).__init__(*args, **kwargs)
-        
-        self.current_theme = "light_modern"
         self.setAutoDefault(True)
         self.setIcon(QIcon.fromTheme("", QIcon("")))
         self.setCursor(Qt.PointingHandCursor)
-        
-        # Amélioration de l'accessibilité
-        self.setToolTip("Cliquez pour exécuter l'action")
-        
-        # Configuration moderne
-        self._setup_modern_button()
-        self._inherit_theme()
-        
-    def _setup_modern_button(self):
-        """Configuration moderne du bouton"""
-        self.setMinimumHeight(35)
-        
-        # Ombre légère
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        shadow.setOffset(0, 2)
-        self.setGraphicsEffect(shadow)
-        
-    def _inherit_theme(self):
-        """Hérite du thème du parent si disponible"""
-        if hasattr(self.parent(), 'get_current_theme'):
-            try:
-                self.apply_theme(self.parent().get_current_theme())
-            except:
-                pass
-                
-    def apply_theme(self, theme_key: str):
-        """Applique un thème au bouton"""
-        try:
-            from .themes.styles import get_theme_colors
-            colors = get_theme_colors(theme_key)
-            
-            primary_color = colors.get("primary", "#0d6efd")
-            bg_color = colors.get("bg", "#ffffff")
-            
-            style = f"""
-            QCommandLinkButton {{
-                background-color: {primary_color};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: 500;
-            }}
-            QCommandLinkButton:hover {{
-                background-color: {primary_color}dd;
-                transform: translateY(-1px);
-            }}
-            QCommandLinkButton:pressed {{
-                background-color: {primary_color}aa;
-            }}
-            """
-            self.setStyleSheet(style)
-            self.current_theme = theme_key
-        except:
-            pass
 
 
 class MenuBtt(Button):
@@ -1015,13 +854,12 @@ class WigglyWidget(QWidget):
 # ===== NOUVEAUX WIDGETS MODERNES =====
 
 class ModernButton(QPushButton):
-    """Bouton moderne avec effets visuels et support des thèmes"""
+    """Bouton moderne avec effets visuels"""
     
     def __init__(self, text="", icon=None, button_type="primary", parent=None):
         super().__init__(text, parent)
         
         self.button_type = button_type  # primary, secondary, success, warning, danger
-        self.current_theme = "light_modern"
         self._is_hovered = False
         self._is_pressed = False
         
@@ -1050,74 +888,6 @@ class ModernButton(QPushButton):
         self.hover_animation = QPropertyAnimation(self, b"geometry")
         self.hover_animation.setDuration(200)
         self.hover_animation.setEasingCurve(QEasingCurve.OutCubic)
-        
-    def apply_theme(self, theme_key: str):
-        """Applique un thème spécifique au bouton"""
-        self.current_theme = theme_key
-        self._update_button_style()
-        
-    def _update_button_style(self):
-        """Met à jour le style selon le type et le thème"""
-        try:
-            from .themes.styles import get_theme_colors
-            colors = get_theme_colors(self.current_theme)
-            
-            if self.button_type == "primary":
-                bg_color = colors.get("primary", "#0d6efd")
-                text_color = "#ffffff"
-            elif self.button_type == "success":
-                bg_color = "#28a745"
-                text_color = "#ffffff"
-            elif self.button_type == "warning":
-                bg_color = "#ffc107"
-                text_color = "#000000"
-            elif self.button_type == "danger":
-                bg_color = "#dc3545"
-                text_color = "#ffffff"
-            else:  # secondary
-                bg_color = "#6c757d"
-                text_color = "#ffffff"
-                
-            style = f"""
-            QPushButton {{
-                background-color: {bg_color};
-                color: {text_color};
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-weight: 600;
-                font-size: 14px;
-            }}
-            QPushButton:hover {{
-                background-color: {self._lighten_color(bg_color)};
-                transform: translateY(-1px);
-            }}
-            QPushButton:pressed {{
-                background-color: {self._darken_color(bg_color)};
-                transform: translateY(0px);
-            }}
-            """
-            self.setStyleSheet(style)
-        except:
-            pass
-            
-    def _lighten_color(self, color_hex: str) -> str:
-        """Éclaircit une couleur hexadécimale"""
-        try:
-            color = QColor(color_hex)
-            color = color.lighter(110)
-            return color.name()
-        except:
-            return color_hex
-            
-    def _darken_color(self, color_hex: str) -> str:
-        """Assombrit une couleur hexadécimale"""
-        try:
-            color = QColor(color_hex)
-            color = color.darker(110)
-            return color.name()
-        except:
-            return color_hex
             
     def enterEvent(self, event):
         """Animation d'entrée de souris"""
@@ -1140,7 +910,6 @@ class ModernCard(QFrame):
     def __init__(self, parent=None, title="", content_widget=None):
         super().__init__(parent)
         
-        self.current_theme = "light_modern"
         self._setup_card()
         self._setup_layout(title, content_widget)
         
@@ -1184,30 +953,6 @@ class ModernCard(QFrame):
             
         if content_widget:
             layout.addWidget(content_widget)
-            
-    def apply_theme(self, theme_key: str):
-        """Applique un thème à la carte"""
-        try:
-            from .themes.styles import get_theme_colors
-            colors = get_theme_colors(theme_key)
-            
-            bg_color = colors.get("bg", "#ffffff")
-            text_color = "#2c3e50" if "light" in theme_key else "#e2e8f0"
-            
-            style = f"""
-            QFrame {{
-                background-color: {bg_color};
-                border-radius: 12px;
-                padding: 16px;
-            }}
-            QLabel {{
-                color: {text_color};
-            }}
-            """
-            self.setStyleSheet(style)
-            self.current_theme = theme_key
-        except:
-            pass
 
 
 class ModernLineEdit(QLineEdit):
@@ -1216,7 +961,6 @@ class ModernLineEdit(QLineEdit):
     def __init__(self, placeholder="", parent=None):
         super().__init__(parent)
         
-        self.current_theme = "light_modern"
         self._setup_line_edit(placeholder)
         self._setup_animations()
         
@@ -1227,44 +971,11 @@ class ModernLineEdit(QLineEdit):
             
         self.setMinimumHeight(45)
         
-        # Style de base
-        apply_theme_to_widget(self, "input_field")
-        
     def _setup_animations(self):
         """Configuration des animations"""
         self.focus_animation = QPropertyAnimation(self, b"geometry")
         self.focus_animation.setDuration(200)
         self.focus_animation.setEasingCurve(QEasingCurve.OutCubic)
-        
-    def apply_theme(self, theme_key: str):
-        """Applique un thème au champ de saisie"""
-        try:
-            from .themes.styles import get_theme_colors
-            colors = get_theme_colors(theme_key)
-            
-            bg_color = colors.get("bg", "#ffffff")
-            primary_color = colors.get("primary", "#0d6efd")
-            
-            style = f"""
-            QLineEdit {{
-                border: 2px solid #e2e8f0;
-                border-radius: 8px;
-                padding: 12px 16px;
-                font-size: 14px;
-                background-color: {bg_color};
-            }}
-            QLineEdit:focus {{
-                border-color: {primary_color};
-                box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
-            }}
-            """
-            self.setStyleSheet(style)
-            self.current_theme = theme_key
-        except:
-            pass
-
-
-# ThemeSelector supprimé - utiliser le système centralisé theme_manager.py
 
 
 # ===== UTILITAIRES MODERNES =====
@@ -1286,8 +997,6 @@ class WidgetFactory:
     def create_input(placeholder: str = "", parent=None) -> ModernLineEdit:
         """Crée un champ de saisie moderne"""
         return ModernLineEdit(placeholder=placeholder, parent=parent)
-    
-    # create_theme_selector supprimé - utiliser theme_manager.py
     
     @staticmethod
     def create_form_layout(fields: list, parent=None) -> QVBoxLayout:
@@ -1325,26 +1034,4 @@ class WidgetFactory:
         return layout
 
 
-# ThemeManager supprimé - utiliser le système centralisé theme_manager.py
 
-
-# Fonctions de thèmes supprimées - utiliser theme_manager.py
-
-# COMPATIBILITÉ - Fonctions obsolètes redirigées vers le système moderne
-def get_complete_themes_list() -> dict:
-    """
-    Liste complète des thèmes disponibles
-    
-    Returns:
-        dict: Dictionnaire complet des thèmes avec descriptions françaises
-    """
-    return {
-        # Thèmes disponibles
-        "system": "🖥️ Thème Système",
-        "light_modern": "🌟 Moderne Clair",
-        "dark_modern": "🌙 Moderne Sombre",
-    }
-
-# get_theme_categories supprimé - utiliser theme_manager.py
-
-# Toutes les fonctions et classes de thèmes supprimées - utiliser theme_manager.py

@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import QAction, QMenuBar, QMessageBox
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
-from .themes.manager import get_theme_manager
 from .clean_db import DBCleanerWidget
 from .common import FWidget
 from .license_view import LicenseViewWidget
@@ -158,52 +157,6 @@ class FMenuBar(QMenuBar, FWidget):
         admin = self.file_.addMenu("&Outils")
 
         preference = self.addMenu("&Préference")
-
-        if "theme" not in exclude_mn:
-            _theme = preference.addMenu("🎨 Thème")
-
-            # Utiliser le nouveau gestionnaire de thèmes centralisé
-            try:
-                theme_manager = get_theme_manager()
-                current_theme = theme_manager.get_current_theme()
-                available_themes = theme_manager.get_available_themes()
-                logger.info(f"Thème actuel: {current_theme}")
-                logger.debug(f"Thèmes disponibles: {available_themes}")
-            except Exception as e:
-                logger.warning(f"Erreur lors de la récupération du gestionnaire de thèmes: {e}")
-                current_theme = "system"  # Thème système par défaut
-                available_themes = {
-                    "system": "🖥️ Thème Système",
-                    "light_modern": "🌟 Moderne Clair",
-                    "dark_modern": "🌙 Moderne Sombre"
-                }
-            
-            # Trier les thèmes pour afficher le thème système en premier
-            sorted_themes = []
-            if "system" in available_themes:
-                sorted_themes.append(("system", available_themes["system"]))
-            for theme_key, theme_display_name in available_themes.items():
-                if theme_key != "system":
-                    sorted_themes.append((theme_key, theme_display_name))
-            
-            # Construction du menu avec tous les thèmes disponibles
-            for theme_key, theme_display_name in sorted_themes:
-                icon = ""
-                if theme_key == current_theme:
-                    icon = "accept"
-                    
-                el_menu = QAction(  
-                    QIcon("{}{}.png".format(CConstants.img_cmedia, icon)),
-                    theme_display_name,
-                    self,
-                )
-                el_menu.setShortcut("")
-                el_menu.triggered.connect(
-                    lambda checked, goto=theme_key: self.change_theme_modern(goto)
-                )
-                _theme.addAction(el_menu)
-                
-            _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
         # Gestion du menu administrateur - Tous les administrateurs doivent avoir accès
         try:
             # Récupérer l'utilisateur connecté
@@ -305,100 +258,6 @@ class FMenuBar(QMenuBar, FWidget):
     def goto_license(self):
         self.open_dialog(LicenseViewWidget, modal=True)
 
-    def change_theme_modern(self, theme_key):
-        """Change le thème en utilisant le nouveau système centralisé"""
-        try:
-            # Utiliser le nouveau gestionnaire de thèmes
-            theme_manager = get_theme_manager()
-            
-            # Appliquer le thème à l'application
-            success = theme_manager.apply_theme_to_application(theme_key)
-            
-            if not success:
-                logger.error(f"Échec de l'application du thème: {theme_key}")
-                if hasattr(self.parent, 'Notify'):
-                    self.parent.Notify("Erreur lors du changement de thème", "error")
-                return
-            
-            # Sauvegarder dans les paramètres pour persistance
-            try:
-                settings = Settings.init_settings()
-                settings.theme = theme_key
-                settings.save()
-                logger.info(f"Thème sauvegardé: {theme_key}")
-            except Exception as e:
-                logger.warning(f"Erreur sauvegarde paramètres: {e}")
-            
-            # Obtenir le nom d'affichage du thème
-            theme_display_name = theme_manager.get_available_themes().get(theme_key, theme_key)
-            
-            # Pour le thème système, ajouter une indication dynamique
-            if theme_key == "system":
-                from .themes.config import ThemeConfig
-                system_resolved = ThemeConfig.resolve_system_theme()
-                if system_resolved == "dark_modern":
-                    theme_display_name += " (Mode Sombre)"
-                else:
-                    theme_display_name += " (Mode Clair)"
-            
-            # Notifier l'utilisateur
-            if hasattr(self.parent, 'Notify'):
-                self.parent.Notify(f"Thème changé vers: {theme_display_name}", "success")
-            
-            logger.info(f"🎨 Thème appliqué: {theme_key} ({theme_display_name})")
-            
-            # Rafraîchir l'interface de manière agressive
-            try:
-                # Forcer le rafraîchissement de la barre de menu elle-même
-                self.style().unpolish(self)
-                self.style().polish(self)
-                self.update()
-                self.repaint()
-                
-                # Rafraîchir les composants principaux
-                self.refresh_main_components()
-                self.update_menu_icons()
-                
-                # Rafraîchir récursivement tous les widgets de la fenêtre parent
-                if self.parent:
-                    self.refresh_widgets_recursively(self.parent)
-                    
-                # Forcer un rafraîchissement global avec un petit délai
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(100, lambda: self._final_refresh())
-                
-            except Exception as e:
-                logger.debug(f"Erreur lors du rafraîchissement: {e}")
-            
-        except Exception as e:
-            logger.error(f"Erreur lors du changement de thème moderne: {e}", exc_info=True)
-            if hasattr(self.parent, 'Notify'):
-                self.parent.Notify("Erreur lors du changement de thème", "error")
-
-    def change_theme(self, theme):
-        """Méthode de compatibilité avec l'ancien système"""
-        # Rediriger vers la nouvelle méthode
-        if theme in ["system", "light_modern", "dark_modern"]:
-            self.change_theme_modern(theme)
-        else:
-            # Mapper les anciens thèmes vers les nouveaux
-            theme_mapping = {
-                "default": "system",  # Le thème par défaut est maintenant "system"
-                "dark": "dark_modern",
-                "light": "light_modern"
-            }
-            new_theme = theme_mapping.get(theme, "system")  # Par défaut, utiliser le thème système
-            self.change_theme_modern(new_theme)
-
-    def apply_theme_dynamically(self):
-        """Méthode de compatibilité - rediriger vers le nouveau système"""
-        try:
-            theme_manager = get_theme_manager()
-            current_theme = theme_manager.get_current_theme()
-            theme_manager.apply_theme(current_theme)
-            logger.info("Thème appliqué via le système moderne")
-        except Exception as e:
-            logger.error(f"Erreur application thème dynamique: {e}")
     
     def refresh_widgets_recursively(self, widget):
         """Rafraîchit récursivement tous les widgets enfants"""
@@ -430,80 +289,6 @@ class FMenuBar(QMenuBar, FWidget):
         except Exception as e:
             logger.debug(f"Erreur lors du rafraîchissement récursif: {e}")
     
-    def refresh_main_components(self):
-        """Rafraîchit les composants principaux de l'interface"""
-        try:
-            from PyQt5.QtWidgets import QWidget
-            
-            # Rafraîchir la barre d'outils si elle existe
-            if hasattr(self.parent, 'toolbar') and self.parent.toolbar:
-                widget = self.parent.toolbar
-                if isinstance(widget, QWidget):
-                    widget.style().unpolish(widget)
-                    widget.style().polish(widget)
-                    widget.update()
-                    widget.repaint()
-            
-            # Rafraîchir la barre de statut si elle existe
-            if hasattr(self.parent, 'statusBar') and callable(self.parent.statusBar):
-                status_bar = self.parent.statusBar()
-                if status_bar and isinstance(status_bar, QWidget):
-                    status_bar.style().unpolish(status_bar)
-                    status_bar.style().polish(status_bar)
-                    status_bar.update()
-                    status_bar.repaint()
-            
-            # Rafraîchir le widget central si il existe
-            central_widget = self.parent.centralWidget()
-            if central_widget and isinstance(central_widget, QWidget):
-                central_widget.style().unpolish(central_widget)
-                central_widget.style().polish(central_widget)
-                central_widget.update()
-                central_widget.repaint()
-                
-                # Si le widget central a une méthode de rafraîchissement
-                if hasattr(central_widget, 'refresh') and callable(getattr(central_widget, 'refresh')):
-                    try:
-                        central_widget.refresh()
-                    except:
-                        pass
-                        
-        except Exception as e:
-            logger.debug(f"Erreur lors du rafraîchissement des composants principaux: {e}")
-                
-    def update_menu_icons(self):
-        """Met à jour les icônes du menu selon le thème actuel"""
-        try:
-            # Rafraîchir la barre de menu actuelle
-            self.style().unpolish(self)
-            self.style().polish(self)
-            self.update()
-            self.repaint()
-            
-            # Rafraîchir tous les menus
-            for action in self.actions():
-                if action.menu():
-                    menu = action.menu()
-                    menu.style().unpolish(menu)
-                    menu.style().polish(menu)
-                    menu.update()
-                    menu.repaint()
-            
-        except Exception as e:
-            logger.debug(f"Erreur lors de la mise à jour des icônes: {e}")
-    
-    def _final_refresh(self):
-        """Rafraîchissement final après un court délai"""
-        try:
-            from PyQt5.QtWidgets import QApplication
-            app = QApplication.instance()
-            if app and self.parent:
-                # Forcer un dernier rafraîchissement de toute l'application
-                self.parent.update()
-                self.parent.repaint()
-                app.processEvents()
-        except Exception as e:
-            logger.debug(f"Erreur lors du rafraîchissement final: {e}")
 
     def restart(self):
         """Méthode de redémarrage conservée pour les cas d'urgence"""

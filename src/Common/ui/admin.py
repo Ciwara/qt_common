@@ -490,26 +490,13 @@ class SettingsTableWidget(FWidget):
         # self.slug_field =
         self.url_field = LineEdit(str(self.settings.url or "http://file-repo.ml"))
         
-        # Récupération des thèmes depuis le nouveau système centralisé
-        try:
-            from .themes import get_available_themes
-            self.list_theme = get_available_themes()
-            logger.debug(f"Thèmes chargés pour l'administration: {self.list_theme}")
-        except Exception as e:
-            logger.warning(f"Erreur lors du chargement des thèmes: {e}")
-            # Fallback
-            self.list_theme = {
-                "default": "Défaut",
-                "light_modern": "Moderne Clair",
-                "dark_modern": "Moderne Sombre"
-            }
+        # Thèmes désactivés - pas de sélection disponible
+        self.list_theme = {}
         
-        # Combobox widget
+        # Combobox widget désactivé
         self.box_theme = QComboBox()
-        for index, value in enumerate(self.list_theme):
-            self.box_theme.addItem("{}".format(self.list_theme[value]), value)
-            if hasattr(self.settings, 'theme') and self.settings.theme == value:
-                self.box_theme.setCurrentIndex(index)
+        self.box_theme.setEnabled(False)
+        self.box_theme.addItem("Non disponible")
 
         self.box_vilgule = QDoubleSpinBox()
 
@@ -552,7 +539,7 @@ class SettingsTableWidget(FWidget):
 
         formbox = QFormLayout()
         formbox.addRow(FormLabel("URL :*"), self.url_field)
-        formbox.addRow(FormLabel("Theme :"), self.box_theme)
+        # formbox.addRow(FormLabel("Theme :"), self.box_theme)  # Thème désactivé
         formbox.addRow(FormLabel("Identification"), self.checked)
         formbox.addRow(FormLabel("Menu vertical"), self.toolbar_checked)
         formbox.addRow(
@@ -586,7 +573,9 @@ class SettingsTableWidget(FWidget):
             )
             print("settings.toolbar", settings.toolbar)
             settings.after_cam = int(self.box_vilgule.value())
-            settings.theme = self.box_theme.itemData(self.box_theme.currentIndex())
+            # Thème désactivé - garder la valeur existante
+            if not hasattr(settings, 'theme') or not settings.theme:
+                settings.theme = "default"
             settings.devise = self.box_devise.itemData(self.box_devise.currentIndex())
             settings.toolbar_position = self.box_position.itemData(
                 self.box_position.currentIndex()
