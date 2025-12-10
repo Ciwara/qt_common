@@ -176,6 +176,25 @@ class GStatusBar(QStatusBar):
     def show_failure_message(self):
         """Affiche un message d'erreur en cas d'échec"""
         self.info_label.setText("Installation failed.")
+    
+    def refresh(self):
+        """Rafraîchit la barre de statut"""
+        try:
+            # Rafraîchir l'affichage
+            self.update()
+            self.repaint()
+            
+            # Si le serveur est configuré et que le thread fonctionne,
+            # déclencher une vérification du serveur
+            if CConstants.SERV and hasattr(self, 'check_serv') and self.check_serv:
+                # Le thread serveur mettra à jour automatiquement via contact_server_signal
+                # On peut juste forcer un rafraîchissement visuel ici
+                if hasattr(self, 'info_label') and self.info_label:
+                    self.info_label.update()
+            
+            logger.debug("Barre de statut rafraîchie")
+        except Exception as e:
+            logger.debug(f"Erreur lors du rafraîchissement de la barre de statut: {e}")
 
 
 class TaskThreadDownload(QThread):

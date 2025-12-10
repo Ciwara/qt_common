@@ -6,7 +6,6 @@ Version 2.0 - Gestion unifiée et simplifiée
 """
 
 from ...cstatic import logger
-from ...models import Settings
 from .config import (
     get_available_themes, 
     get_current_theme, 
@@ -55,6 +54,7 @@ class ThemeManager:
         
         try:
             from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtCore import QTimer
             
             app = QApplication.instance()
             if not app:
@@ -69,10 +69,18 @@ class ThemeManager:
             style = self.get_theme_style(theme_key)
             
             # Appliquer le style à l'application
+            app.setStyleSheet("")  # Réinitialiser d'abord pour forcer le rafraîchissement
+            app.processEvents()  # Traiter les événements immédiatement
+            
+            # Appliquer le nouveau style
             app.setStyleSheet(style)
             
-            # Rafraîchir toutes les fenêtres
+            # Rafraîchir toutes les fenêtres de manière agressive
             self._refresh_all_windows(app)
+            
+            # Utiliser un timer pour forcer un rafraîchissement supplémentaire
+            # Cela garantit que tous les widgets sont mis à jour même s'ils sont complexes
+            QTimer.singleShot(50, lambda: self._force_refresh_all_widgets(app))
             
             logger.info(f"Thème '{theme_key}' appliqué à toute l'application")
             return True
@@ -84,11 +92,17 @@ class ThemeManager:
     def _refresh_all_windows(self, app):
         """Rafraîchit toutes les fenêtres de l'application"""
         try:
+            from PyQt5.QtWidgets import QWidget
+            
             for widget in app.topLevelWidgets():
-                if widget.isVisible():
+                if isinstance(widget, QWidget) and widget.isVisible():
+                    # Forcer le rafraîchissement du widget
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
                     widget.update()
                     widget.repaint()
-                    # Rafraîchir récursivement
+                    
+                    # Rafraîchir récursivement tous les enfants
                     self._refresh_widget_recursively(widget)
             
             # Traiter les événements en attente
@@ -100,12 +114,57 @@ class ThemeManager:
     def _refresh_widget_recursively(self, widget):
         """Rafraîchit récursivement un widget et ses enfants"""
         try:
-            for child in widget.findChildren(object):
-                if hasattr(child, 'update') and hasattr(child, 'repaint'):
+            from PyQt5.QtWidgets import QWidget
+            
+            # Trouver tous les widgets enfants
+            for child in widget.findChildren(QWidget):
+                try:
+                    # Forcer le rafraîchissement du style
+                    child.style().unpolish(child)
+                    child.style().polish(child)
                     child.update()
                     child.repaint()
+                    
+                    # Si le widget a une méthode refresh ou apply_theme, l'appeler
+                    if hasattr(child, 'refresh') and callable(getattr(child, 'refresh')):
+                        try:
+                            child.refresh()
+                        except Exception:
+                            pass
+                    elif hasattr(child, 'apply_theme') and callable(getattr(child, 'apply_theme')):
+                        try:
+                            child.apply_theme(self.current_theme)
+                        except Exception:
+                            pass
+                except Exception:
+                    # Continuer même si un widget échoue
+                    pass
+                    
         except Exception as e:
             logger.debug(f"Erreur lors du rafraîchissement récursif: {e}")
+    
+    def _force_refresh_all_widgets(self, app):
+        """Force un rafraîchissement complet de tous les widgets"""
+        try:
+            from PyQt5.QtWidgets import QWidget
+            
+            # Parcourir tous les widgets de l'application
+            for widget in app.allWidgets():
+                if isinstance(widget, QWidget) and widget.isVisible():
+                    try:
+                        # Forcer la réapplication du style
+                        widget.style().unpolish(widget)
+                        widget.style().polish(widget)
+                        widget.update()
+                        widget.repaint()
+                    except Exception:
+                        pass
+            
+            # Traiter tous les événements en attente
+            app.processEvents()
+            
+        except Exception as e:
+            logger.debug(f"Erreur lors du rafraîchissement forcé: {e}")
     
     def is_current_theme_dark(self):
         """Vérifie si le thème actuel est sombre"""

@@ -5,6 +5,7 @@ Configuration centralisée et nettoyée des thèmes
 Version 2.0 - Système unifié et optimisé
 """
 
+import platform
 from ...cstatic import logger
 from ...models import Settings
 
@@ -15,13 +16,13 @@ class ThemeConfig:
     
     # Définition complète de tous les thèmes disponibles
     THEMES = {
-        "default": {
-            "name": "Défaut", 
-            "description": "Thème par défaut simple et compatible",
-            "is_dark": False,
-            "category": "Basique",
+        "system": {
+            "name": "Thème Système", 
+            "description": "Suit automatiquement les préférences système (clair/sombre)",
+            "is_dark": None,  # Dynamique selon le système
+            "category": "Système",
             "author": "System",
-            "version": "1.0"
+            "version": "3.0"
         },
         "light_modern": {
             "name": "Moderne Clair",
@@ -38,27 +39,11 @@ class ThemeConfig:
             "category": "Moderne",
             "author": "Qt Common",
             "version": "2.0"
-        },
-        "blue_professional": {
-            "name": "Professionnel Bleu",
-            "description": "Thème professionnel avec des accents bleus",
-            "is_dark": False,
-            "category": "Professionnel",
-            "author": "Qt Common",
-            "version": "1.5"
-        },
-        "green_nature": {
-            "name": "Nature Verte",
-            "description": "Thème inspiré de la nature avec des tons verts",
-            "is_dark": False,
-            "category": "Coloré",
-            "author": "Qt Common",
-            "version": "1.5"
         }
     }
     
     # Thème par défaut
-    DEFAULT_THEME = "default"
+    DEFAULT_THEME = "system"
     
     @classmethod
     def get_all_themes(cls):
@@ -74,7 +59,102 @@ class ThemeConfig:
     def is_dark_theme(cls, theme_key):
         """Détermine si un thème est sombre"""
         theme_info = cls.get_theme_info(theme_key)
-        return theme_info.get("is_dark", False) if theme_info else False
+        if not theme_info:
+            return False
+        
+        is_dark = theme_info.get("is_dark")
+        
+        # Pour le thème système, détecter dynamiquement
+        if theme_key == "system" or is_dark is None:
+            return cls._detect_system_dark_mode()
+        
+        return is_dark
+    
+    @classmethod
+    def _detect_system_dark_mode(cls):
+        """Détecte si le système est en mode sombre"""
+        try:
+            system = platform.system()
+            
+            # macOS - utiliser les préférences utilisateur via defaults
+            if system == "Darwin":
+                try:
+                    from subprocess import check_output, CalledProcessError
+                    try:
+                        result = check_output(["defaults", "read", "-g", "AppleInterfaceStyle"]).decode().strip()
+                        return result == "Dark"
+                    except CalledProcessError:
+                        # Si la clé n'existe pas, c'est le mode clair (par défaut avant macOS Mojave)
+                        return False
+                except Exception:
+                    # Fallback: essayer avec AppKit si disponible
+                    try:
+                        import AppKit
+                        appearance = AppKit.NSAppearance.currentAppearance()
+                        if appearance:
+                            dark_appearance = appearance.name()
+                            return "Dark" in str(dark_appearance)
+                    except ImportError:
+                        pass
+            
+            # Windows - utiliser les APIs Windows
+            elif system == "Windows":
+                try:
+                    import winreg
+                    # Vérifier la clé de registre Windows
+                    key = winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                    )
+                    apps_use_light_theme = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                    winreg.CloseKey(key)
+                    return apps_use_light_theme == 0
+                except:
+                    pass
+            
+            # Linux - vérifier les variables d'environnement GTK
+            elif system == "Linux":
+                try:
+                    import os
+                    gtk_theme = os.environ.get("GTK_THEME", "").lower()
+                    if "dark" in gtk_theme:
+                        return True
+                    
+                    # Vérifier les préférences via gsettings si disponible
+                    from subprocess import check_output
+                    try:
+                        result = check_output(["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"]).decode().strip()
+                        return "dark" in result.lower()
+                    except:
+                        pass
+                except:
+                    pass
+            
+            # Fallback: utiliser la palette Qt si disponible
+            try:
+                from PyQt5.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    palette = app.palette()
+                    window_color = palette.color(palette.Window)
+                    # Si la couleur de fond est sombre, considérer que c'est le mode sombre
+                    return window_color.lightness() < 128
+            except:
+                pass
+            
+            # Par défaut, retourner False (mode clair)
+            return False
+            
+        except Exception as e:
+            logger.debug(f"Erreur lors de la détection du mode sombre système: {e}")
+            return False
+    
+    @classmethod
+    def resolve_system_theme(cls):
+        """Résout le thème système vers un thème réel (light_modern ou dark_modern)"""
+        if cls._detect_system_dark_mode():
+            return "dark_modern"
+        return "light_modern"
     
     @classmethod
     def theme_exists(cls, theme_key):
@@ -86,39 +166,6 @@ class ThemeConfig:
         """Retourne la clé du thème par défaut"""
         return cls.DEFAULT_THEME
     
-    @classmethod
-    def get_themes_by_category(cls, category=None):
-        """Retourne les thèmes par catégorie"""
-        if category:
-            return {
-                key: config for key, config in cls.THEMES.items() 
-                if config.get("category") == category
-            }
-        
-        # Grouper par catégorie
-        categories = {}
-        for key, config in cls.THEMES.items():
-            cat = config.get("category", "Autre")
-            if cat not in categories:
-                categories[cat] = {}
-            categories[cat][key] = config
-        return categories
-    
-    @classmethod
-    def get_light_themes(cls):
-        """Retourne tous les thèmes clairs"""
-        return {
-            key: config["name"] for key, config in cls.THEMES.items() 
-            if not config.get("is_dark", False)
-        }
-    
-    @classmethod
-    def get_dark_themes(cls):
-        """Retourne tous les thèmes sombres"""
-        return {
-            key: config["name"] for key, config in cls.THEMES.items() 
-            if config.get("is_dark", False)
-        }
 
 # ===== FONCTIONS PUBLIQUES SIMPLIFIÉES =====
 
@@ -128,7 +175,7 @@ def get_available_themes():
         return ThemeConfig.get_all_themes()
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des thèmes: {e}")
-        return {"default": "Défaut"}
+        return {"light_modern": "Moderne Clair", "dark_modern": "Moderne Sombre"}
 
 def is_theme_dark(theme_key):
     """Fonction principale pour vérifier si un thème est sombre"""
@@ -153,8 +200,15 @@ def get_current_theme():
         settings = Settings.init_settings()
         current_theme = settings.theme
         
+        # Si pas de thème configuré, utiliser le thème système par défaut
+        if not current_theme:
+            current_theme = ThemeConfig.get_default_theme()
+            settings.theme = current_theme
+            settings.save()
+            logger.info(f"Thème système par défaut configuré: {current_theme}")
+        
         # Vérifier si le thème existe, sinon utiliser le défaut
-        if not current_theme or not theme_exists(current_theme):
+        if not theme_exists(current_theme):
             logger.warning(f"Thème '{current_theme}' invalide, utilisation du thème par défaut")
             current_theme = ThemeConfig.get_default_theme()
             settings.theme = current_theme
@@ -212,5 +266,4 @@ def get_theme_info(theme_key=None):
         return None
 
 # Initialisation du module
-logger.info(f"Configuration des thèmes v2.0 initialisée - {len(ThemeConfig.THEMES)} thèmes disponibles")
-logger.debug(f"Thèmes disponibles: {list(ThemeConfig.THEMES.keys())}") 
+logger.info(f"Configuration des thèmes initialisée - {len(ThemeConfig.THEMES)} thèmes disponibles: {list(ThemeConfig.THEMES.keys())}") 

@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QGroupBox,
+    QMessageBox,
     QTextEdit,
     QVBoxLayout,
 )
@@ -212,7 +213,20 @@ class LicenseViewWidget(QDialog, FWidget):
                     )
 
     def export_license(self):
-        export_license_as_file()
+        try:
+            export_license_as_file()
+        except IOError as e:
+            if hasattr(self, 'parent') and self.parent:
+                self.parent.Notify(
+                    f"❌ {str(e)}",
+                    "error"
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Erreur",
+                    f"❌ {str(e)}"
+                )
 
     def active_trial(self):
         try:

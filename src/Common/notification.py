@@ -1,184 +1,403 @@
-###############################
-#                             #
-#  Coded By: Saurabh Joshi    #
-#  Original: 12/10/12         #
-#  Date Modified: 20/05/18    #
-#  modif by: Fadiga Ibrahima  #
-#  File: Notification System  #
-###############################
-import time
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# maintainer: Fad
+"""
+Module de notification moderne avec interface améliorée
+"""
+
+from PyQt5.QtCore import QTimer, Qt, QPropertyAnimation, QEasingCurve, QPoint, QRectF
 from PyQt5.QtGui import QColor, QPainter, QPainterPath
+from PyQt5.QtWidgets import (
+    QWidget, QLabel, QHBoxLayout, QGraphicsDropShadowEffect, QApplication, QPushButton
+)
 
 
-class Notification(QtWidgets.QWidget):
-    closed = QtCore.pyqtSignal()
-
-    def __init__(self, mssg, parent=None, type_mssg="info", duration=3000, *args, **kwargs):
-        super(Notification, self).__init__(parent=parent, *args, **kwargs)
-        
-        self.mssg = str(mssg)
+class ModernNotification(QWidget):
+    """Widget de notification moderne avec animations et styles améliorés"""
+    
+    def __init__(self, mssg="👋 Bonjour", type_mssg="info", parent=None, duration=4000):
+        super().__init__(parent)
+        self.message = mssg
         self.type_mssg = type_mssg
         self.duration = duration
-        self.workThread = None
+        self._opacity = 1.0
         
         # Configuration de la fenêtre
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(
+            Qt.WindowStaysOnTopHint | 
+            Qt.FramelessWindowHint | 
+            Qt.Tool
+        )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         
-        # Styles selon le type de message
-        self.styles = {
-            "success": {
-                "bg": "#10b981",
-                "border": "#059669",
-                "icon": "✅"
-            },
-            "error": {
-                "bg": "#ef4444",
-                "border": "#dc2626",
-                "icon": "❌"
-            },
-            "warning": {
-                "bg": "#f59e0b",
-                "border": "#d97706",
-                "icon": "⚠️"
-            },
-            "info": {
-                "bg": "#3b82f6",
-                "border": "#2563eb",
-                "icon": "ℹ️"
-            }
+        # Configuration de l'interface
+        self._setup_ui()
+        self._setup_style()
+        self._setup_animations()
+        
+        # Positionnement
+        self._position_notification()
+        
+        # Timer pour la fermeture automatique
+        if self.duration > 0:
+            QTimer.singleShot(self.duration, self.fade_out)
+    
+    def _setup_ui(self):
+        """Configure l'interface utilisateur"""
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
+        
+        # Icône selon le type
+        icon_label = QLabel()
+        icon_label.setFixedSize(32, 32)
+        icon_label.setAlignment(Qt.AlignCenter)
+        
+        # Définir l'icône selon le type
+        icon_map = {
+            "success": "✅",
+            "error": "❌",
+            "warning": "⚠️",
+            "info": "ℹ️"
         }
+        icon_text = icon_map.get(self.type_mssg, "🔔")
+        icon_label.setText(icon_text)
+        icon_label.setStyleSheet("font-size: 24px;")
         
-        # Style par défaut
-        self.current_style = self.styles.get(type_mssg, self.styles["info"])
-        
-        self.create_notification()
-        self.show()
-
-    def create_notification(self):
-        # Layout principal
-        layout = QtWidgets.QHBoxLayout()
-        layout.setContentsMargins(15, 10, 15, 10)
-        
-        # Label avec le message
-        label = QtWidgets.QLabel(self.mssg)
-        label.setStyleSheet("""
-            color: white;
-            font-size: 14px;
-            font-weight: 500;
-            padding: 5px;
+        # Message (la couleur sera définie dans _setup_style selon le thème)
+        message_label = QLabel(self.message)
+        message_label.setWordWrap(True)
+        message_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        message_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                background: transparent;
+                padding: 0px;
+            }
         """)
         
         # Bouton de fermeture
-        close_btn = QtWidgets.QPushButton("×")
-        close_btn.setFixedSize(20, 20)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                color: white;
-                border: none;
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(24, 24)
+        close_btn.setFlat(True)
+        # Le style du bouton sera adapté dans _setup_style selon le thème
+        self.close_btn = close_btn
+        # Utiliser clicked.connect avec une lambda pour éviter les problèmes de référence
+        close_btn.clicked.connect(lambda checked=False: self.fade_out())
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setToolTip("Fermer")
+        close_btn.setFocusPolicy(Qt.NoFocus)  # Éviter que le bouton prenne le focus
+        
+        layout.addWidget(icon_label)
+        layout.addWidget(message_label, 1)
+        layout.addWidget(close_btn)
+        
+        self.setLayout(layout)
+    
+    def _setup_style(self):
+        """Configure le style selon le type de message et le thème"""
+        # Récupérer le thème actuel
+        try:
+            from .ui.themes.manager import get_theme_manager
+            theme_manager = get_theme_manager()
+            current_theme = theme_manager.get_current_theme()
+            is_dark = "dark" in current_theme.lower()
+        except Exception:
+            # Fallback si le système de thème n'est pas disponible
+            is_dark = False
+        
+        # Couleurs selon le type et le thème
+        if is_dark:
+            # Thème sombre
+            colors = {
+                "success": {
+                    "bg": "#1e4620",
+                    "border": "#2d5a31",
+                    "text": "#81c784",
+                    "icon_bg": "#4caf50"
+                },
+                "error": {
+                    "bg": "#4a1f1f",
+                    "border": "#5d2727",
+                    "text": "#e57373",
+                    "icon_bg": "#f44336"
+                },
+                "warning": {
+                    "bg": "#4a3f1f",
+                    "border": "#5d4f27",
+                    "text": "#ffb74d",
+                    "icon_bg": "#ff9800"
+                },
+                "info": {
+                    "bg": "#1e3a4a",
+                    "border": "#2d4d5a",
+                    "text": "#64b5f6",
+                    "icon_bg": "#2196f3"
+                }
+            }
+        else:
+            # Thème clair (par défaut)
+            colors = {
+                "success": {
+                    "bg": "#d4edda",
+                    "border": "#c3e6cb",
+                    "text": "#155724",
+                    "icon_bg": "#28a745"
+                },
+                "error": {
+                    "bg": "#f8d7da",
+                    "border": "#f5c6cb",
+                    "text": "#721c24",
+                    "icon_bg": "#dc3545"
+                },
+                "warning": {
+                    "bg": "#fff3cd",
+                    "border": "#ffeaa7",
+                    "text": "#856404",
+                    "icon_bg": "#ffc107"
+                },
+                "info": {
+                    "bg": "#d1ecf1",
+                    "border": "#bee5eb",
+                    "text": "#0c5460",
+                    "icon_bg": "#17a2b8"
+                }
+            }
+        
+        color_scheme = colors.get(self.type_mssg, colors["info"])
+        
+        # Style avec coins arrondis et ombre
+        shadow_opacity = 40 if is_dark else 80
+        close_btn_color = "#95a5a6" if is_dark else "#7f8c8d"
+        close_btn_hover_bg = "#34495e" if is_dark else "#ecf0f1"
+        close_btn_pressed_bg = "#2c3e50" if is_dark else "#bdc3c7"
+        
+        self.setStyleSheet(f"""
+            ModernNotification {{
+                background-color: {color_scheme['bg']};
+                border: 2px solid {color_scheme['border']};
+                border-radius: 12px;
+                min-width: 300px;
+                max-width: 500px;
+            }}
+            QLabel {{
+                color: {color_scheme['text']};
+            }}
+            QPushButton {{
+                color: {close_btn_color};
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.2);
-                border-radius: 10px;
-            }
+                background: transparent;
+                border: none;
+                border-radius: 12px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                color: #e74c3c;
+                background: {close_btn_hover_bg};
+            }}
+            QPushButton:pressed {{
+                background: {close_btn_pressed_bg};
+            }}
         """)
-        close_btn.clicked.connect(self.close_notification)
         
-        layout.addWidget(label)
-        layout.addWidget(close_btn)
-        self.setLayout(layout)
+        # Ajouter une ombre portée adaptée au thème
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, shadow_opacity))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+    
+    def _setup_animations(self):
+        """Configure les animations d'apparition et de disparition"""
+        # Animation de fade in
+        self.fade_in_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_in_animation.setDuration(300)
+        self.fade_in_animation.setStartValue(0.0)
+        self.fade_in_animation.setEndValue(1.0)
+        self.fade_in_animation.setEasingCurve(QEasingCurve.OutCubic)
         
-        # Animation d'entrée
-        self.animation = QPropertyAnimation(self, b"pos")
-        self.animation.setDuration(300)
-        self.animation.setEasingCurve(QEasingCurve.OutCubic)
+        # Animation de slide in
+        self.slide_animation = QPropertyAnimation(self, b"pos")
+        self.slide_animation.setDuration(300)
+        self.slide_animation.setEasingCurve(QEasingCurve.OutCubic)
         
-        # Position initiale (hors écran)
-        screen = QtWidgets.QApplication.primaryScreen().geometry()
-        self.setGeometry(0, 0, 300, 50)
-        start_pos = QPoint(screen.width(), screen.height() - 100)
-        end_pos = QPoint(screen.width() - self.width() - 20, screen.height() - 100)
-        
+        # Démarrer les animations
+        self.fade_in_animation.start()
+        self._animate_slide_in()
+    
+    def _animate_slide_in(self):
+        """Animation de glissement depuis le haut"""
+        screen = QApplication.primaryScreen().geometry()
+        # Position finale sera gérée par NotificationManager
+        start_pos = QPoint(
+            screen.width() - self.width() - 20,
+            -self.height()
+        )
+        # Position temporaire, sera repositionnée par le manager
+        end_pos = QPoint(
+            screen.width() - self.width() - 20,
+            20
+        )
         self.move(start_pos)
-        self.animation.setStartValue(start_pos)
-        self.animation.setEndValue(end_pos)
-        self.animation.start()
+        self.slide_animation.setStartValue(start_pos)
+        self.slide_animation.setEndValue(end_pos)
+        self.slide_animation.finished.connect(self._on_slide_finished)
+        self.slide_animation.start()
+    
+    def _on_slide_finished(self):
+        """Appelé après l'animation de slide pour repositionner"""
+        NotificationManager._reposition_all()
+    
+    def _position_notification(self):
+        """Positionne la notification en haut à droite"""
+        screen = QApplication.primaryScreen().geometry()
+        # Ajuster la taille selon la longueur du message
+        message_length = len(self.message)
+        if message_length < 30:
+            width = 300
+        elif message_length < 60:
+            width = 400
+        else:
+            width = 500
         
-        # Timer pour la fermeture automatique
-        QtCore.QTimer.singleShot(self.duration, self.close_notification)
-
+        self.resize(width, 80)
+        # La position finale sera gérée par NotificationManager
+        self.move(
+            screen.width() - self.width() - 20,
+            20
+        )
+    
+    def fade_out(self):
+        """Animation de disparition"""
+        # Retirer immédiatement du gestionnaire pour éviter les problèmes de repositionnement
+        NotificationManager._remove_notification(self)
+        
+        # Désactiver le bouton de fermeture pour éviter les clics multiples
+        if hasattr(self, 'close_btn'):
+            self.close_btn.setEnabled(False)
+        
+        fade_out_animation = QPropertyAnimation(self, b"windowOpacity")
+        fade_out_animation.setDuration(300)
+        fade_out_animation.setStartValue(1.0)
+        fade_out_animation.setEndValue(0.0)
+        fade_out_animation.setEasingCurve(QEasingCurve.InCubic)
+        fade_out_animation.finished.connect(self._on_fade_out_finished)
+        fade_out_animation.start()
+    
+    def _on_fade_out_finished(self):
+        """Appelé après l'animation de fade out pour fermer et nettoyer"""
+        self.hide()
+        self.close()
+        self.deleteLater()
+    
+    def showEvent(self, event):
+        """Affiche la notification avec animation"""
+        super().showEvent(event)
+        self.raise_()
+        self.activateWindow()
+    
     def paintEvent(self, event):
+        """Dessine les coins arrondis"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Dessiner le fond avec coins arrondis
         path = QPainterPath()
-        rect = QtCore.QRectF(self.rect())  # Conversion en QRectF
-        path.addRoundedRect(rect, 10, 10)
+        # Convertir QRect en QRectF pour addRoundedRect
+        rect = QRectF(self.rect().adjusted(1, 1, -1, -1))
+        path.addRoundedRect(rect, 12.0, 12.0)
         
-        # Fond principal
-        painter.fillPath(path, QColor(self.current_style["bg"]))
-        
-        # Bordure
-        painter.setPen(QColor(self.current_style["border"]))
-        painter.drawPath(path)
+        painter.fillPath(path, QColor(self.palette().color(self.backgroundRole())))
 
-    def close_notification(self):
-        # Animation de sortie
-        self.animation.setDirection(QPropertyAnimation.Backward)
-        self.animation.finished.connect(self.close)
-        self.animation.start()
 
-    def closeEvent(self, event):
-        self.cleanup()
-        super().closeEvent(event)
+class NotificationManager:
+    """Gestionnaire de notifications pour empiler et gérer plusieurs notifications"""
+    
+    _notifications = []
+    _spacing = 10
+    _base_y = 20
+    
+    @classmethod
+    def add_notification(cls, notification):
+        """Ajoute une notification à la liste et repositionne toutes les notifications"""
+        cls._notifications.append(notification)
+        cls._reposition_all()
         
-    def cleanup(self):
-        """Nettoie les ressources avant la fermeture"""
+        # Nettoyer les notifications fermées
+        def on_destroyed():
+            cls._remove_notification(notification)
+        notification.destroyed.connect(on_destroyed)
+    
+    @classmethod
+    def _remove_notification(cls, notification):
+        """Retire une notification de la liste"""
         try:
-            if self.workThread and self.workThread.isRunning():
-                self.workThread.stop()
-                if not self.workThread.wait(1000):
-                    self.workThread.terminate()
-                    self.workThread.wait()
-        except Exception as e:
-            print(f"Erreur lors du nettoyage de la notification: {e}")
-
-
-class WorkThread(QtCore.QThread):
-    update = QtCore.pyqtSignal()
-    vanish = QtCore.pyqtSignal()
-    finished = QtCore.pyqtSignal()
-
-    def __init__(self, mv):
-        super(WorkThread, self).__init__()
-        self.should_stop = False
-
-    def stop(self):
-        """Arrête le thread proprement"""
-        self.should_stop = True
-
-    def run(self):
+            if notification in cls._notifications:
+                cls._notifications.remove(notification)
+                cls._reposition_all()
+        except (RuntimeError, AttributeError):
+            # Ignorer les erreurs si la notification est déjà supprimée
+            pass
+    
+    @classmethod
+    def _reposition_all(cls):
+        """Repositionne toutes les notifications actives"""
         try:
-            # Animation initiale
-            for i in range(30):
-                if self.should_stop:
-                    return
-                time.sleep(0.01)
-                self.update.emit()
-                
-            if self.should_stop:
-                return
-                
-            time.sleep(0.1)
-            self.vanish.emit()
-            time.sleep(0.1)
-            self.finished.emit()
-        except Exception as e:
-            print(f"Erreur dans WorkThread: {e}")
-        finally:
-            self.should_stop = True
+            screen = QApplication.primaryScreen().geometry()
+            y_offset = cls._base_y
+            
+            # Filtrer les notifications valides et visibles
+            valid_notifications = [
+                notif for notif in cls._notifications 
+                if notif is not None and notif.isVisible()
+            ]
+            
+            for notif in valid_notifications:
+                try:
+                    notif.move(
+                        screen.width() - notif.width() - 20,
+                        y_offset
+                    )
+                    y_offset += notif.height() + cls._spacing
+                except (RuntimeError, AttributeError):
+                    # Ignorer les erreurs pour les notifications supprimées
+                    continue
+        except Exception:
+            # Ignorer les erreurs de repositionnement
+            pass
+
+
+class Notification:
+    """Classe wrapper pour créer et afficher des notifications"""
+    
+    def __init__(self, mssg="👋 Bonjour", type_mssg="info", parent=None, duration=4000):
+        """
+        Crée et affiche une notification
+        
+        Args:
+            mssg: Message à afficher
+            type_mssg: Type de notification (success, error, warning, info)
+            parent: Widget parent
+            duration: Durée d'affichage en millisecondes (0 = permanent)
+        """
+        # Trouver la fenêtre principale si parent n'est pas fourni
+        if parent is None:
+            parent = QApplication.activeWindow()
+            if parent is None:
+                # Chercher la fenêtre principale
+                for widget in QApplication.topLevelWidgets():
+                    if hasattr(widget, 'isWindow') and widget.isWindow():
+                        parent = widget
+                        break
+        
+        self.notification = ModernNotification(mssg, type_mssg, parent, duration)
+        
+        # Ajouter au gestionnaire de notifications
+        NotificationManager.add_notification(self.notification)
+        
+        self.notification.show()
+        
+        # Garder une référence pour éviter la suppression par le garbage collector
+        self.notification.setAttribute(Qt.WA_DeleteOnClose, False)

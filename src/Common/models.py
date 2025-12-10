@@ -74,7 +74,7 @@ class BaseModel(peewee.Model):
         return list(cls.select())
 
     def save(self, *args, **kwargs):
-        logger.info(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {getattr(self, 'id', 'new')})")
+        logger.debug(f"Sauvegarde de l'enregistrement {self.__class__.__name__} (id: {getattr(self, 'id', 'new')})")
         return super().save(*args, **kwargs)
 
     def delete_instance(self, *args, **kwargs):
@@ -605,7 +605,7 @@ class Settings(BaseModel):
                     True,             # toolbar
                     cls.LEFT,         # toolbar_position
                     "http://file-repo.ml",  # url
-                    "default",        # theme
+                    "system",        # theme
                     cls.XOF           # devise
                 ])
                 logger.debug("Paramètres créés avec succès via SQL")

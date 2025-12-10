@@ -35,7 +35,7 @@ def run_migrations():
         # Trouver tous les fichiers de migration
         migration_files = sorted([
             f for f in migrations_dir.glob("migration_*.py")
-            if f.name != "__init__.py" and f.name != "run_migrations.py"
+            if f.name not in ["__init__.py", "run_migrations.py", "migration_tracker.py"]
         ])
         
         if not migration_files:

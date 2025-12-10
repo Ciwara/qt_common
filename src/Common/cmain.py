@@ -3,17 +3,29 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fadiga
 
+"""
+Ce module ne doit pas être exécuté directement.
+Utilisez example_main.py ou importez la fonction cmain() depuis un autre script.
+"""
+
 import gettext
 import locale
 import sys
 import atexit
 
-import gettext_windows
+# Vérification si le module est exécuté directement
+if __name__ == "__main__":
+    print("❌ Erreur: Ce module ne peut pas être exécuté directement.")
+    print("📝 Utilisez plutôt: python example_main.py")
+    print("   ou importez la fonction: from Common.cmain import cmain")
+    sys.exit(1)
+
 from PyQt5.QtWidgets import QDialog, QApplication
 
+from . import gettext_windows
 from .cstatic import CConstants, logger
 from .models import Organization, Owner, Settings, init_database, dbh
-from .ui.theme_manager import get_theme_manager
+from .ui.themes.manager import get_theme_manager
 from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
@@ -118,8 +130,13 @@ def apply_global_theme():
     try:
         # Utiliser le nouveau système de thèmes centralisé
         theme_manager = get_theme_manager()
-        theme_manager.apply_theme("light_modern")
-        logger.info("Thème appliqué globalement à toute l'application")
+        
+        # Récupérer le thème actuel (qui sera "system" par défaut)
+        current_theme = theme_manager.get_current_theme()
+        
+        # Appliquer le thème
+        theme_manager.apply_theme_to_application(current_theme)
+        logger.info(f"Thème '{current_theme}' appliqué globalement à toute l'application")
     except ImportError:
         # Fallback vers l'ancien système
         logger.debug("theme_manager non disponible, utilisation du fallback")
@@ -176,12 +193,36 @@ def handle_initial_conditions(window):
         # Vérification de la connexion
         if settings.auth_required:
             logger.debug("Authentification requise")
-            if LoginWidget().exec_() != QDialog.Accepted:
+            login_dialog = LoginWidget()
+            # Connecter le signal de connexion réussie pour mettre à jour le menu
+            if hasattr(window, 'refresh_menu_after_login'):
+                login_dialog.login_successful.connect(window.refresh_menu_after_login)
+            if login_dialog.exec_() != QDialog.Accepted:
                 logger.warning("Connexion annulée ou échouée")
                 return False
             logger.info("Authentification réussie")
+            # Mettre à jour le menu après la connexion réussie
+            if hasattr(window, 'refresh_menu_after_login'):
+                window.refresh_menu_after_login()
         else:
-            logger.debug("Aucune authentification requise")
+            logger.debug("Aucune authentification requise - Connexion automatique du dernier utilisateur")
+            # Désactiver tous les utilisateurs identifiés
+            Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
+            
+            # Récupérer le dernier utilisateur connecté (celui avec la dernière date de connexion)
+            last_user = Owner.select().where(Owner.isactive == True).order_by(Owner.last_login.desc()).first()
+            
+            if last_user:
+                # Connecter automatiquement le dernier utilisateur
+                last_user.is_identified = True
+                last_user.save()
+                logger.info(f"✅ Utilisateur '{last_user.username}' connecté automatiquement")
+                
+                # Mettre à jour le menu pour afficher l'utilisateur connecté
+                if hasattr(window, 'refresh_menu_after_login'):
+                    window.refresh_menu_after_login()
+            else:
+                logger.warning("⚠️ Aucun utilisateur actif trouvé pour la connexion automatique")
         
         logger.info("Toutes les conditions initiales sont satisfaites")
         window.showMaximized()

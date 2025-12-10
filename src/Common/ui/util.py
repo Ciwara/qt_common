@@ -441,7 +441,10 @@ def get_lcse_of_file():
 
 
 def get_lcse_file():
-    return os.path.join(os.path.dirname(os.path.abspath("__file__")), "LICENCE")
+    """Retourne le chemin du fichier de licence dans le répertoire de travail de l'application"""
+    # Utiliser le répertoire de travail courant (où l'application est lancée)
+    # Le fichier LICENCE doit être dans le répertoire racine de l'application
+    return os.path.join(os.getcwd(), "LICENCE")
 
 
 def _disk_c(self):

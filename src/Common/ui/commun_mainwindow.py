@@ -252,6 +252,32 @@ class CommonMainWindow(QMainWindow, FWindow):
         self.change_context(self.page)
         logger.debug("Contexte initial changé vers ExamplePageWidget")
         
+    def logout(self):
+        """Déconnecte l'utilisateur actuel"""
+        from ..models import Owner
+        try:
+            # Mise à jour atomique de tous les utilisateurs connectés
+            Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
+            logger.info("Déconnexion réussie de tous les utilisateurs")
+        except Exception as e:
+            logger.error(f"Erreur lors de la déconnexion: {e}")
+
+    def exit(self):
+        """Ferme l'application en effectuant les nettoyages nécessaires"""
+        import sys
+        logger.info("Fermeture de l'application")
+        from ..models import Settings
+        try:
+            settings = Settings.select().where(Settings.id == 1).first()
+            if settings and settings.auth_required:
+                logger.info("Déconnexion avant fermeture")
+                self.logout()
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification des paramètres: {e}")
+        
+        self.close()
+        sys.exit(0)
+
     def check_session(self):
         """Vérifie la validité de la session active"""
         from ..models import Owner, Settings
@@ -311,8 +337,20 @@ class CommonMainWindow(QMainWindow, FWindow):
             self.refresh_menu_bar()
             
             # Rafraîchir la barre de statut
-            if hasattr(self, 'status_bar'):
-                self.status_bar.refresh()
+            if hasattr(self, 'status_bar') and self.status_bar:
+                # Vérifier si la méthode refresh existe avant de l'appeler
+                if hasattr(self.status_bar, 'refresh') and callable(getattr(self.status_bar, 'refresh')):
+                    try:
+                        self.status_bar.refresh()
+                    except Exception as e:
+                        logger.debug(f"Erreur lors du rafraîchissement de la barre de statut: {e}")
+                else:
+                    # Si la méthode refresh n'existe pas, faire juste un update/repaint
+                    try:
+                        self.status_bar.update()
+                        self.status_bar.repaint()
+                    except Exception as e:
+                        logger.debug(f"Erreur lors de la mise à jour de la barre de statut: {e}")
             
             # Rafraîchir le widget central si nécessaire
             if hasattr(self, 'central_widget'):

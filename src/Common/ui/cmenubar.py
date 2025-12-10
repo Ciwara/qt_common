@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QAction, QMenuBar, QMessageBox
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
-from .theme_manager import get_theme_manager
+from .themes.manager import get_theme_manager
 from .clean_db import DBCleanerWidget
 from .common import FWidget
 from .license_view import LicenseViewWidget
@@ -26,13 +26,20 @@ class FMenuBar(QMenuBar, FWidget):
 
         exclude_mn = CConstants.EXCLUDE_MENU_ADMIN
         
-        # Menu Utilisateur
-        self.user_menu = self.addMenu("👤 Utilisateur")
-        
-        # Ajouter les informations de l'utilisateur connecté
+        # Menu Utilisateur - Afficher le nom de l'utilisateur connecté dans le titre
+        # Ne pas utiliser de fallback pour éviter d'afficher le superuser par défaut
         try:
-            # Récupérer l'utilisateur connecté une seule fois
-            self.connected_owner = Owner.select().where(Owner.is_identified==True).first()
+            # Récupérer uniquement l'utilisateur connecté (is_identified == True)
+            # Normalement il ne devrait y avoir qu'un seul utilisateur connecté à la fois
+            self.connected_owner = Owner.select().where(Owner.is_identified == True).order_by(Owner.last_login.desc()).first()
+            
+            # Afficher le nom de l'utilisateur dans le titre du menu
+            if self.connected_owner:
+                menu_title = f"👤 {self.connected_owner.username}"
+            else:
+                menu_title = "👤 Utilisateur"
+            
+            self.user_menu = self.addMenu(menu_title)
             
             if self.connected_owner:
                 # Menu déroulant avec les informations de l'utilisateur
@@ -65,14 +72,15 @@ class FMenuBar(QMenuBar, FWidget):
                     phone_action.setEnabled(False)
                     self.user_menu.addAction(phone_action)
                 
-                # Dernière connexion
-                last_login = QAction(
-                    QIcon(f"{CConstants.img_cmedia}time.png"),
-                    f"🕒 Dernière connexion: {self.connected_owner.last_login.strftime('%d/%m/%Y %H:%M')}",
-                    self
-                )
-                last_login.setEnabled(False)
-                self.user_menu.addAction(last_login)
+                # Dernière connexion (si disponible)
+                if hasattr(self.connected_owner, 'last_login') and self.connected_owner.last_login:
+                    last_login = QAction(
+                        QIcon(f"{CConstants.img_cmedia}time.png"),
+                        f"🕒 Dernière connexion: {self.connected_owner.last_login.strftime('%d/%m/%Y %H:%M')}",
+                        self
+                    )
+                    last_login.setEnabled(False)
+                    self.user_menu.addAction(last_login)
                 
                 # Séparateur
                 self.user_menu.addSeparator()
@@ -85,8 +93,20 @@ class FMenuBar(QMenuBar, FWidget):
                 )
                 logout_action.triggered.connect(self.logout)
                 self.user_menu.addAction(logout_action)
+            else:
+                # Afficher un message si aucun utilisateur n'est connecté
+                no_user_action = QAction(
+                    QIcon(f"{CConstants.img_cmedia}user_deactive.png"),
+                    "Aucun utilisateur connecté",
+                    self
+                )
+                no_user_action.setEnabled(False)
+                self.user_menu.addAction(no_user_action)
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout des informations utilisateur: {e}")
+            # Créer le menu même en cas d'erreur
+            if not hasattr(self, 'user_menu'):
+                self.user_menu = self.addMenu("👤 Utilisateur")
         
         # Menu File
         self.file_ = self.addMenu("&Fichier")
@@ -115,7 +135,8 @@ class FMenuBar(QMenuBar, FWidget):
         backup.addAction(import_db)
 
         try:
-            ow = Owner.select().where(Owner.is_identified==True )
+            # Utiliser is_identified pour trouver l'utilisateur connecté
+            ow = Owner.select().where(Owner.is_identified == True)
             logger.debug(f"Recherche des propriétaires connectés: {ow.exists()}")
             
             if ow.exists():
@@ -147,16 +168,26 @@ class FMenuBar(QMenuBar, FWidget):
                 current_theme = theme_manager.get_current_theme()
                 available_themes = theme_manager.get_available_themes()
                 logger.info(f"Thème actuel: {current_theme}")
+                logger.debug(f"Thèmes disponibles: {available_themes}")
             except Exception as e:
                 logger.warning(f"Erreur lors de la récupération du gestionnaire de thèmes: {e}")
-                current_theme = "light_modern"  # Thème par défaut
+                current_theme = "system"  # Thème système par défaut
                 available_themes = {
+                    "system": "🖥️ Thème Système",
                     "light_modern": "🌟 Moderne Clair",
                     "dark_modern": "🌙 Moderne Sombre"
                 }
             
-            # Construction du menu avec les 2 thèmes modernes
+            # Trier les thèmes pour afficher le thème système en premier
+            sorted_themes = []
+            if "system" in available_themes:
+                sorted_themes.append(("system", available_themes["system"]))
             for theme_key, theme_display_name in available_themes.items():
+                if theme_key != "system":
+                    sorted_themes.append((theme_key, theme_display_name))
+            
+            # Construction du menu avec tous les thèmes disponibles
+            for theme_key, theme_display_name in sorted_themes:
                 icon = ""
                 if theme_key == current_theme:
                     icon = "accept"
@@ -173,14 +204,16 @@ class FMenuBar(QMenuBar, FWidget):
                 _theme.addAction(el_menu)
                 
             _theme.setIcon(QIcon(f"{CConstants.img_cmedia}theme.png"))
-        # Gestion du menu administrateur
+        # Gestion du menu administrateur - Tous les administrateurs doivent avoir accès
         try:
-            logger.debug(f"Vérification des droits admin: {ow.exists()}")
-            if ow.exists():
-                owner = ow.get()
-                logger.debug(f"Utilisateur connecté - groupe: {owner.group}, Admin requis: {Owner.ADMIN}")
+            # Récupérer l'utilisateur connecté
+            connected_owner = Owner.select().where(Owner.is_identified == True).first()
+            
+            if connected_owner:
+                logger.debug(f"Utilisateur connecté - groupe: {connected_owner.group}, Admin requis: {Owner.ADMIN}")
                 
-                if owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
+                # Vérifier si l'utilisateur est administrateur (ADMIN ou SUPERUSER)
+                if connected_owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
                     admin_ = QAction(
                         QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}settings.png")),
                         "Gestion Administration",
@@ -189,13 +222,27 @@ class FMenuBar(QMenuBar, FWidget):
                     admin_.setShortcut("Ctrl+G")
                     admin_.triggered.connect(self.goto_admin)
                     preference.addAction(admin_)
-                    logger.debug("Menu d'administration ajouté avec succès")
+                    logger.debug("Menu d'administration ajouté avec succès pour l'administrateur")
                 else:
-                    logger.debug("Accès administrateur refusé - droits insuffisants")
+                    logger.debug(f"Accès administrateur refusé - groupe: {connected_owner.group}, requis: {Owner.ADMIN} ou {Owner.SUPERUSER}")
             else:
                 logger.debug("Aucun utilisateur connecté - menu admin non ajouté")
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout du menu administrateur: {e}")
+            # En cas d'erreur, essayer quand même d'ajouter le menu si un utilisateur existe
+            try:
+                connected_owner = Owner.select().where(Owner.is_identified == True).first()
+                if connected_owner and connected_owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
+                    admin_ = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}settings.png")),
+                        "Gestion Administration",
+                        self,
+                    )
+                    admin_.setShortcut("Ctrl+G")
+                    admin_.triggered.connect(self.goto_admin)
+                    preference.addAction(admin_)
+            except:
+                pass
         # logout
         lock = QAction(QIcon(f"{CConstants.img_cmedia}login.png"), "Verrouiller", self)
         lock.setShortcut("Ctrl+V")
@@ -263,7 +310,15 @@ class FMenuBar(QMenuBar, FWidget):
         try:
             # Utiliser le nouveau gestionnaire de thèmes
             theme_manager = get_theme_manager()
-            theme_manager.apply_theme(theme_key)
+            
+            # Appliquer le thème à l'application
+            success = theme_manager.apply_theme_to_application(theme_key)
+            
+            if not success:
+                logger.error(f"Échec de l'application du thème: {theme_key}")
+                if hasattr(self.parent, 'Notify'):
+                    self.parent.Notify("Erreur lors du changement de thème", "error")
+                return
             
             # Sauvegarder dans les paramètres pour persistance
             try:
@@ -274,28 +329,65 @@ class FMenuBar(QMenuBar, FWidget):
             except Exception as e:
                 logger.warning(f"Erreur sauvegarde paramètres: {e}")
             
-            # Notifier l'utilisateur
-            self.parent.Notify(f"Thème changé vers: {theme_manager.get_available_themes().get(theme_key, theme_key)}", "success")
+            # Obtenir le nom d'affichage du thème
+            theme_display_name = theme_manager.get_available_themes().get(theme_key, theme_key)
             
-            logger.info(f"🎨 Thème moderne appliqué: {theme_key}")
+            # Pour le thème système, ajouter une indication dynamique
+            if theme_key == "system":
+                from .themes.config import ThemeConfig
+                system_resolved = ThemeConfig.resolve_system_theme()
+                if system_resolved == "dark_modern":
+                    theme_display_name += " (Mode Sombre)"
+                else:
+                    theme_display_name += " (Mode Clair)"
+            
+            # Notifier l'utilisateur
+            if hasattr(self.parent, 'Notify'):
+                self.parent.Notify(f"Thème changé vers: {theme_display_name}", "success")
+            
+            logger.info(f"🎨 Thème appliqué: {theme_key} ({theme_display_name})")
+            
+            # Rafraîchir l'interface de manière agressive
+            try:
+                # Forcer le rafraîchissement de la barre de menu elle-même
+                self.style().unpolish(self)
+                self.style().polish(self)
+                self.update()
+                self.repaint()
+                
+                # Rafraîchir les composants principaux
+                self.refresh_main_components()
+                self.update_menu_icons()
+                
+                # Rafraîchir récursivement tous les widgets de la fenêtre parent
+                if self.parent:
+                    self.refresh_widgets_recursively(self.parent)
+                    
+                # Forcer un rafraîchissement global avec un petit délai
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(100, lambda: self._final_refresh())
+                
+            except Exception as e:
+                logger.debug(f"Erreur lors du rafraîchissement: {e}")
             
         except Exception as e:
-            logger.error(f"Erreur lors du changement de thème moderne: {e}")
-            self.parent.Notify("Erreur lors du changement de thème", "error")
+            logger.error(f"Erreur lors du changement de thème moderne: {e}", exc_info=True)
+            if hasattr(self.parent, 'Notify'):
+                self.parent.Notify("Erreur lors du changement de thème", "error")
 
     def change_theme(self, theme):
         """Méthode de compatibilité avec l'ancien système"""
         # Rediriger vers la nouvelle méthode
-        if theme in ["light_modern", "dark_modern"]:
+        if theme in ["system", "light_modern", "dark_modern"]:
             self.change_theme_modern(theme)
         else:
             # Mapper les anciens thèmes vers les nouveaux
             theme_mapping = {
-                "default": "light_modern",
+                "default": "system",  # Le thème par défaut est maintenant "system"
                 "dark": "dark_modern",
                 "light": "light_modern"
             }
-            new_theme = theme_mapping.get(theme, "light_modern")
+            new_theme = theme_mapping.get(theme, "system")  # Par défaut, utiliser le thème système
             self.change_theme_modern(new_theme)
 
     def apply_theme_dynamically(self):
@@ -341,21 +433,31 @@ class FMenuBar(QMenuBar, FWidget):
     def refresh_main_components(self):
         """Rafraîchit les composants principaux de l'interface"""
         try:
+            from PyQt5.QtWidgets import QWidget
+            
             # Rafraîchir la barre d'outils si elle existe
             if hasattr(self.parent, 'toolbar') and self.parent.toolbar:
-                self.parent.toolbar.update()
-                self.parent.toolbar.repaint()
+                widget = self.parent.toolbar
+                if isinstance(widget, QWidget):
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
+                    widget.update()
+                    widget.repaint()
             
             # Rafraîchir la barre de statut si elle existe
             if hasattr(self.parent, 'statusBar') and callable(self.parent.statusBar):
                 status_bar = self.parent.statusBar()
-                if status_bar:
+                if status_bar and isinstance(status_bar, QWidget):
+                    status_bar.style().unpolish(status_bar)
+                    status_bar.style().polish(status_bar)
                     status_bar.update()
                     status_bar.repaint()
             
             # Rafraîchir le widget central si il existe
             central_widget = self.parent.centralWidget()
-            if central_widget:
+            if central_widget and isinstance(central_widget, QWidget):
+                central_widget.style().unpolish(central_widget)
+                central_widget.style().polish(central_widget)
                 central_widget.update()
                 central_widget.repaint()
                 
@@ -372,24 +474,36 @@ class FMenuBar(QMenuBar, FWidget):
     def update_menu_icons(self):
         """Met à jour les icônes du menu selon le thème actuel"""
         try:
-            # Cette méthode peut être étendue pour adapter les icônes au thème
-            # Par exemple, utiliser des icônes claires pour les thèmes sombres
-            
             # Rafraîchir la barre de menu actuelle
+            self.style().unpolish(self)
+            self.style().polish(self)
             self.update()
             self.repaint()
             
-            # Optionnel: adapter les icônes selon le thème (fonctionnalité future)
-            # from ..ui.style_qss import is_dark_theme
-            # if is_dark_theme():
-            #     # Utiliser des icônes adaptées aux thèmes sombres
-            #     pass
-            # else:
-            #     # Utiliser des icônes adaptées aux thèmes clairs
-            #     pass
+            # Rafraîchir tous les menus
+            for action in self.actions():
+                if action.menu():
+                    menu = action.menu()
+                    menu.style().unpolish(menu)
+                    menu.style().polish(menu)
+                    menu.update()
+                    menu.repaint()
             
         except Exception as e:
             logger.debug(f"Erreur lors de la mise à jour des icônes: {e}")
+    
+    def _final_refresh(self):
+        """Rafraîchissement final après un court délai"""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app and self.parent:
+                # Forcer un dernier rafraîchissement de toute l'application
+                self.parent.update()
+                self.parent.repaint()
+                app.processEvents()
+        except Exception as e:
+            logger.debug(f"Erreur lors du rafraîchissement final: {e}")
 
     def restart(self):
         """Méthode de redémarrage conservée pour les cas d'urgence"""
@@ -487,6 +601,146 @@ Fichier à relancer: {main_file}"""
             logger.error(f"Erreur lors de l'ouverture du fichier log: {e}")
 
     # About
+    def update_user_menu(self):
+        """Met à jour le menu utilisateur avec l'utilisateur connecté"""
+        try:
+            # Récupérer l'utilisateur connecté avec is_identified
+            # Si plusieurs utilisateurs sont identifiés (ne devrait pas arriver), prendre celui avec la dernière connexion
+            self.connected_owner = Owner.select().where(Owner.is_identified == True).order_by(Owner.last_login.desc()).first()
+            
+            # Ne pas utiliser de fallback - afficher uniquement l'utilisateur réellement connecté
+            # Le fallback vers le premier utilisateur actif causait l'affichage du superuser au lieu de l'utilisateur connecté
+            
+            # Afficher le nom de l'utilisateur dans le titre du menu (toujours afficher quelque chose)
+            if self.connected_owner:
+                menu_title = f"👤 {self.connected_owner.username}"
+            else:
+                menu_title = "👤 Utilisateur"
+            
+            # Créer ou mettre à jour le menu
+            if not hasattr(self, 'user_menu'):
+                self.user_menu = self.addMenu(menu_title)
+            else:
+                self.user_menu.setTitle(menu_title)
+            
+            # Vider le menu existant
+            self.user_menu.clear()
+            
+            if self.connected_owner:
+                # Menu déroulant avec les informations de l'utilisateur
+                user_info = QAction(
+                    QIcon(f"{CConstants.img_cmedia}user_active.png"),
+                    f"👤 {self.connected_owner.username}",
+                    self
+                )
+                user_info.setEnabled(False)  # Non cliquable
+                self.user_menu.addAction(user_info)
+                
+                # Séparateur
+                self.user_menu.addSeparator()
+                
+                # Informations détaillées
+                user_details = QAction(
+                    QIcon(f"{CConstants.img_cmedia}info.png"),
+                    f"Groupe: {'👑 Admin' if self.connected_owner.group == Owner.ADMIN else '👤 Utilisateur'}",
+                    self
+                )
+                user_details.setEnabled(False)
+                self.user_menu.addAction(user_details)
+                
+                if self.connected_owner.phone:
+                    phone_action = QAction(
+                        QIcon(f"{CConstants.img_cmedia}phone.png"),
+                        f"📱 {self.connected_owner.phone}",
+                        self
+                    )
+                    phone_action.setEnabled(False)
+                    self.user_menu.addAction(phone_action)
+                
+                # Dernière connexion (si disponible)
+                if hasattr(self.connected_owner, 'last_login') and self.connected_owner.last_login:
+                    last_login = QAction(
+                        QIcon(f"{CConstants.img_cmedia}time.png"),
+                        f"🕒 Dernière connexion: {self.connected_owner.last_login.strftime('%d/%m/%Y %H:%M')}",
+                        self
+                    )
+                    last_login.setEnabled(False)
+                    self.user_menu.addAction(last_login)
+                
+                # Séparateur
+                self.user_menu.addSeparator()
+                
+                # Bouton de déconnexion
+                logout_action = QAction(
+                    QIcon(f"{CConstants.img_cmedia}logout.png"),
+                    "🔒 Déconnexion",
+                    self
+                )
+                logout_action.triggered.connect(self.logout)
+                self.user_menu.addAction(logout_action)
+            else:
+                # Afficher un message si aucun utilisateur n'est connecté
+                no_user_action = QAction(
+                    QIcon(f"{CConstants.img_cmedia}user_deactive.png"),
+                    "Aucun utilisateur connecté",
+                    self
+                )
+                no_user_action.setEnabled(False)
+                self.user_menu.addAction(no_user_action)
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du menu utilisateur: {e}")
+            # Créer le menu même en cas d'erreur
+            if not hasattr(self, 'user_menu'):
+                self.user_menu = self.addMenu("👤 Utilisateur")
+        
+        # Mettre à jour le menu administration après la mise à jour du menu utilisateur
+        self.update_admin_menu()
+
+    def update_admin_menu(self):
+        """Met à jour le menu administration selon les droits de l'utilisateur connecté"""
+        try:
+            # Trouver le menu Préférence
+            preference_menu = None
+            for action in self.actions():
+                if action.menu() and action.text() == "&Préference":
+                    preference_menu = action.menu()
+                    break
+            
+            if not preference_menu:
+                logger.warning("Menu Préférence non trouvé")
+                return
+            
+            # Supprimer l'ancien menu administration s'il existe
+            if hasattr(self, 'admin_menu_action'):
+                try:
+                    preference_menu.removeAction(self.admin_menu_action)
+                except:
+                    pass
+            
+            # Récupérer l'utilisateur connecté
+            connected_owner = Owner.select().where(Owner.is_identified == True).order_by(Owner.last_login.desc()).first()
+            
+            if connected_owner:
+                # Vérifier si l'utilisateur est administrateur (ADMIN ou SUPERUSER)
+                if connected_owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
+                    # Ajouter le menu administration
+                    admin_ = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}settings.png")),
+                        "Gestion Administration",
+                        self,
+                    )
+                    admin_.setShortcut("Ctrl+G")
+                    admin_.triggered.connect(self.goto_admin)
+                    preference_menu.addAction(admin_)
+                    self.admin_menu_action = admin_
+                    logger.debug(f"Menu d'administration ajouté pour l'utilisateur {connected_owner.username} (groupe: {connected_owner.group})")
+                else:
+                    logger.debug(f"Accès administrateur refusé - groupe: {connected_owner.group}, requis: {Owner.ADMIN} ou {Owner.SUPERUSER}")
+            else:
+                logger.debug("Aucun utilisateur connecté - menu admin non ajouté")
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du menu administration: {e}")
+
     def goto_about(self):
         QMessageBox.about(
             self,

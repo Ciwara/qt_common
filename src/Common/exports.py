@@ -149,5 +149,8 @@ def copyanything(src, dest):
 
 
 def export_license_as_file():
+    """Exporte le fichier de licence en l'ouvrant dans le système de fichiers"""
     fil = get_lcse_file()
+    if not os.path.exists(fil):
+        raise IOError(f"Le fichier de licence n'existe pas : {fil}\nVeuillez d'abord activer une licence.")
     uopen_file(fil)

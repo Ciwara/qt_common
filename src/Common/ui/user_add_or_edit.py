@@ -166,22 +166,25 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         if not self.check_password_is_valide():
             return False
             
-        # Validation de la force du mot de passe
+        # Validation de la force du mot de passe (avertissement seulement, ne bloque pas)
         password = str(self.password_field.text()).strip()
         is_valid, message = Owner.validate_password(password)
         if not is_valid:
+            # Afficher seulement un avertissement, ne pas bloquer la création
             QMessageBox.warning(
                 self,
-                "⚠️ Mot de passe faible",
+                "⚠️ Avertissement : Mot de passe faible",
                 f"🔒 {message}\n\n"
-                "Le mot de passe doit contenir :\n"
+                "⚠️ Attention : Votre mot de passe ne respecte pas les recommandations de sécurité.\n\n"
+                "Recommandations pour un mot de passe fort :\n"
                 "• Au moins 8 caractères\n"
                 "• Au moins une majuscule\n"
                 "• Au moins une minuscule\n"
                 "• Au moins un chiffre\n"
-                "• Au moins un caractère spécial"
+                "• Au moins un caractère spécial\n\n"
+                "💡 Vous pouvez continuer, mais il est fortement recommandé d'utiliser un mot de passe plus sécurisé."
             )
-            return False
+            # Ne pas retourner False, permettre la création avec un avertissement
             
         return True
 

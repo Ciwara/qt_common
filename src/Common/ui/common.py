@@ -105,7 +105,7 @@ class FMainWindow(QMainWindow):
     def _setup_theme_system(self):
         """Configuration du système de thèmes"""
         try:
-            from .themes.styles import get_available_themes
+            from .themes.config import get_available_themes
             self.available_themes = get_available_themes()
             self.apply_theme(self.current_theme)
         except ImportError:
@@ -1333,29 +1333,16 @@ class WidgetFactory:
 # COMPATIBILITÉ - Fonctions obsolètes redirigées vers le système moderne
 def get_complete_themes_list() -> dict:
     """
-    Liste complète des 10 thèmes ultra-modernes disponibles
+    Liste complète des thèmes disponibles
     
     Returns:
         dict: Dictionnaire complet des thèmes avec descriptions françaises
     """
     return {
-        # Thèmes de base modernes
+        # Thèmes disponibles
+        "system": "🖥️ Thème Système",
         "light_modern": "🌟 Moderne Clair",
         "dark_modern": "🌙 Moderne Sombre",
-        
-        # Thèmes colorés avancés
-        "professional_blue": "💼 Professionnel Bleu",
-        "nature_green": "🌿 Nature Verte",
-        "warm_orange": "🔥 Chaleureux Orange",
-        "creative_purple": "🎨 Créatif Violet",
-        
-        # Thèmes ultra-modernes révolutionnaires
-        "glassmorphism": "💎 Glassmorphism",
-        "neumorphism": "🎯 Neumorphism",
-        "cyberpunk_neon": "⚡ Cyberpunk Néon",
-        
-        # Thème par défaut (pour compatibilité)
-        "default": "📋 Défaut Système"
     }
 
 # get_theme_categories supprimé - utiliser theme_manager.py
