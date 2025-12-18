@@ -3,7 +3,7 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
-from PyQt5.QtCore import Qt, QTimer, QSettings
+from PyQt5.QtCore import Qt, QTimer, QEvent
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QToolBar, 
@@ -22,9 +22,10 @@ from PyQt5.QtWidgets import (
 )
 
 from ..cstatic import CConstants, logger
+from ..models import Settings
 from .cmenubar import FMenuBar
 from .cmenutoolbar import FMenuToolBar
-from .common import FMainWindow, FWidget
+from .common import FWidget
 from .statusbar import GStatusBar
 from ..updater import UpdaterInit
 from .window import FWindow
@@ -201,6 +202,13 @@ class CommonMainWindow(QMainWindow, FWindow):
         self.setWindowIcon(QIcon(f"{CConstants.APP_LOGO}"))
         self.setWindowTitle(f"{CConstants.APP_NAME} {CConstants.APP_VERSION}")
 
+        # Charger les paramètres (créés si absents)
+        self._settings = None
+        try:
+            self._settings = Settings.init_settings()
+        except Exception as exc:
+            logger.error(f"Impossible de charger Settings: {exc}")
+
         # Vérifier si un utilisateur est connecté
 
      
@@ -209,12 +217,8 @@ class CommonMainWindow(QMainWindow, FWindow):
         self.session_timer.timeout.connect(self.check_session)
         self.session_timer.start(60000)  # Vérifier toutes les minutes
 
-        # NOTE:
-        # - `self.toolBar` (QToolBar) et `self.toolbar` (FMenuToolBar) co-existent dans ce projet.
-        # - On leur donne des objectName stables pour permettre saveState/restoreState.
         self.toolBar = QToolBar()
-        self.toolBar.setObjectName("CommonMainWindow.toolBar")
-        self.addToolBar(Qt.LeftToolBarArea, self.toolBar)
+        self.toolBar.setMovable(True)
 
         # Pour statusBar
         try:
@@ -248,129 +252,157 @@ class CommonMainWindow(QMainWindow, FWindow):
         logger.debug("Barre de menu initialisée")
 
         self.toolbar = FMenuToolBar(self)
-        self.toolbar.setObjectName("CommonMainWindow.menuToolBar")
-        self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
+        self.toolbar.setMovable(True)
         logger.debug("Barre d'outils initialisée")
 
-        # Appliquer la configuration (position/visibilité) puis restaurer l'état sauvegardé (si existe)
+        # Appliquer (position + visibilité) depuis Settings, puis écouter les déplacements
         self._apply_toolbar_settings()
-        QTimer.singleShot(0, self._restore_window_state)
+        # Debounce pour éviter des écritures multiples pendant le drag
+        self._pending_toolbar_position_save = False
 
-        # Sauvegarde "à chaud" dès qu'un élément bouge (au mieux-effort)
-        self._connect_state_persistence_signals()
+        # Détection robuste (compatible PyQt5/Qt5): eventFilter sur les toolbars
+        # + sauvegarde au closeEvent
+        try:
+            self.toolBar.installEventFilter(self)
+            self.toolbar.installEventFilter(self)
+        except Exception as exc:
+            logger.debug(f"Impossible d'installer eventFilter sur toolbars: {exc}")
+
+        # En plus de l'eventFilter, écouter les signaux Qt (selon plateformes, c'est parfois le seul fiable)
+        try:
+            self.toolBarAreaChanged.connect(self._on_tool_bar_area_changed)
+        except Exception as exc:
+            logger.debug(f"Impossible de connecter toolBarAreaChanged: {exc}")
+        for tb in (self.toolBar, self.toolbar):
+            try:
+                tb.topLevelChanged.connect(lambda *_: self._schedule_toolbar_position_save())
+            except Exception:
+                pass
+            try:
+                tb.orientationChanged.connect(lambda *_: self._schedule_toolbar_position_save())
+            except Exception:
+                pass
 
         # Changer cette ligne pour utiliser ExamplePageWidget au lieu de TestViewWidget
         self.page = ExamplePageWidget  # ou TestViewWidget pour la page de test basique
         self.change_context(self.page)
         logger.debug("Contexte initial changé vers ExamplePageWidget")
 
-    def _settings(self) -> QSettings:
-        # Garder un nom stable (évite que le changement de APP_NAME casse la restauration)
-        return QSettings("qt_common", "qt_common")
-
-    def _toolbar_area_from_settings_value(self, value: str) -> Qt.ToolBarArea:
-        try:
-            from ..models import Settings
-        except Exception:
-            Settings = None
-
-        v = (value or "").lower().strip()
-        if Settings is not None:
-            if v == Settings.RIGHT:
-                return Qt.RightToolBarArea
-            if v == Settings.TOP:
-                return Qt.TopToolBarArea
-            if v == Settings.BOTTOM:
-                return Qt.BottomToolBarArea
-        # Défaut / gauche
+    def _qt_area_from_settings(self, position: str) -> Qt.ToolBarArea:
+        """Convertit Settings.toolbar_position en Qt.ToolBarArea."""
+        if position == Settings.RIGHT:
+            return Qt.RightToolBarArea
+        if position == Settings.TOP:
+            return Qt.TopToolBarArea
+        if position == Settings.BOTTOM:
+            return Qt.BottomToolBarArea
         return Qt.LeftToolBarArea
 
+    def _settings_position_from_qt(self, area: Qt.ToolBarArea) -> str:
+        """Convertit Qt.ToolBarArea en Settings.toolbar_position."""
+        if area == Qt.RightToolBarArea:
+            return Settings.RIGHT
+        if area == Qt.TopToolBarArea:
+            return Settings.TOP
+        if area == Qt.BottomToolBarArea:
+            return Settings.BOTTOM
+        return Settings.LEFT
+
     def _apply_toolbar_settings(self):
-        """Applique les paramètres en base: visibilité + position du menu vertical."""
+        """Restaure l'état des toolbars depuis Settings."""
         try:
-            from ..models import Settings
+            settings = self._settings or Settings.init_settings()
+        except Exception as exc:
+            logger.error(f"Impossible d'initialiser Settings: {exc}")
+            settings = None
 
-            st = Settings.init_settings()
-            toolbar_enabled = bool(getattr(st, "toolbar", True))
-            toolbar_pos = getattr(st, "toolbar_position", Settings.LEFT)
+        # Position
+        pos = getattr(settings, "toolbar_position", Settings.LEFT) if settings else Settings.LEFT
+        area = self._qt_area_from_settings(pos)
+        self.addToolBar(area, self.toolBar)
+        self.addToolBar(area, self.toolbar)
 
-            # Visibilité
-            self.toolbar.setVisible(toolbar_enabled)
+        # Visibilité
+        toolbar_enabled = bool(getattr(settings, "toolbar", True)) if settings else True
+        self.toolBar.setVisible(toolbar_enabled)
+        self.toolbar.setVisible(toolbar_enabled)
 
-            # Position (uniquement si la toolbar est visible)
-            if toolbar_enabled:
-                area = self._toolbar_area_from_settings_value(toolbar_pos)
-                # Déplacer la toolbar (remove/add pour forcer l'area)
-                try:
-                    self.removeToolBar(self.toolbar)
-                except Exception:
-                    pass
-                self.addToolBar(area, self.toolbar)
-
-        except Exception as e:
-            logger.debug(f"Impossible d'appliquer les paramètres de toolbar: {e}")
-
-    def _restore_window_state(self):
-        """Restaure la géométrie + l'état (toolbars/docks) si disponible."""
+    def eventFilter(self, obj, event):
+        """Capture le déplacement/reattachement des toolbars pour persister la position."""
         try:
-            s = self._settings()
-            geo = s.value("CommonMainWindow/geometry")
-            state = s.value("CommonMainWindow/state")
+            if obj in (getattr(self, "toolBar", None), getattr(self, "toolbar", None)):
+                et = event.type()
+                if et in (QEvent.Move, QEvent.ParentChange, QEvent.Show, QEvent.Hide):
+                    self._schedule_toolbar_position_save()
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
 
-            if geo is not None:
-                # PyQt peut retourner QByteArray ou str selon backend; restoreGeometry gère QByteArray
-                self.restoreGeometry(geo)
-            if state is not None:
-                self.restoreState(state)
-        except Exception as e:
-            logger.debug(f"Restauration état fenêtre ignorée: {e}")
+    def _schedule_toolbar_position_save(self):
+        if self._pending_toolbar_position_save:
+            return
+        self._pending_toolbar_position_save = True
+        QTimer.singleShot(200, self._persist_toolbar_position_from_ui)
 
-    def _save_window_state(self):
-        """Sauvegarde la géométrie + l'état (toolbars/docks)."""
+    def _on_tool_bar_area_changed(self, *args):
+        """Slot tolérant (signature PyQt5 variable selon build)."""
         try:
-            s = self._settings()
-            s.setValue("CommonMainWindow/geometry", self.saveGeometry())
-            s.setValue("CommonMainWindow/state", self.saveState())
-            s.sync()
-        except Exception as e:
-            logger.debug(f"Sauvegarde état fenêtre ignorée: {e}")
+            # Qt5: (QToolBar*, Qt.ToolBarArea) ou parfois seulement (Qt.ToolBarArea)
+            if len(args) == 2:
+                toolbar, area = args
+                if toolbar in (getattr(self, "toolBar", None), getattr(self, "toolbar", None)):
+                    # Orientation cohérente
+                    try:
+                        orient = Qt.Horizontal if area in (Qt.TopToolBarArea, Qt.BottomToolBarArea) else Qt.Vertical
+                        if getattr(self, "toolbar", None):
+                            self.toolbar.setOrientation(orient)
+                        if getattr(self, "toolBar", None):
+                            self.toolBar.setOrientation(orient)
+                    except Exception:
+                        pass
+            self._schedule_toolbar_position_save()
+        except Exception:
+            self._schedule_toolbar_position_save()
 
-    def _connect_state_persistence_signals(self):
-        """Connecte des signaux pour sauvegarder dès qu'on déplace/masque la toolbar."""
+    def _persist_toolbar_position_from_ui(self):
+        """Lit la position actuelle dans l'UI et l'enregistre dans Settings."""
+        self._pending_toolbar_position_save = False
         try:
-            for tb in (getattr(self, "toolBar", None), getattr(self, "toolbar", None)):
-                if tb is None:
-                    continue
-                # Changements courants
-                try:
-                    tb.topLevelChanged.connect(lambda _=None: self._save_window_state())
-                except Exception:
-                    pass
-                try:
-                    tb.visibilityChanged.connect(lambda _=None: self._save_window_state())
-                except Exception:
-                    pass
-                try:
-                    tb.orientationChanged.connect(lambda _=None: self._save_window_state())
-                except Exception:
-                    pass
+            # On prend la position de la toolbar principale de menu (FMenuToolBar) si possible.
+            tb = getattr(self, "toolbar", None) or getattr(self, "toolBar", None)
+            if tb is None:
+                return
 
-            # Si le signal existe côté QMainWindow (selon binding/Qt), on l'utilise aussi
-            sig = getattr(self, "toolBarAreaChanged", None)
-            if sig is not None:
-                try:
-                    sig.connect(lambda *args: self._save_window_state())
-                except Exception:
-                    pass
-        except Exception as e:
-            logger.debug(f"Impossible de connecter les signaux de persistance: {e}")
+            area = self.toolBarArea(tb)
+
+            # Orientation cohérente
+            try:
+                orient = Qt.Horizontal if area in (Qt.TopToolBarArea, Qt.BottomToolBarArea) else Qt.Vertical
+                if getattr(self, "toolbar", None):
+                    self.toolbar.setOrientation(orient)
+                if getattr(self, "toolBar", None):
+                    self.toolBar.setOrientation(orient)
+            except Exception:
+                pass
+
+            settings = self._settings or Settings.init_settings()
+            new_pos = self._settings_position_from_qt(area)
+            if getattr(settings, "toolbar_position", None) == new_pos:
+                return
+
+            settings.toolbar_position = new_pos
+            settings.save()
+            self._settings = settings
+            logger.info(f"✅ Position du menu enregistrée: {new_pos}")
+        except Exception as exc:
+            logger.error(f"Erreur sauvegarde position menu: {exc}")
         
     def logout(self):
         """Déconnecte l'utilisateur actuel"""
         from ..models import Owner
         try:
             # Mise à jour atomique de tous les utilisateurs connectés
-            Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
+            Owner.update(is_identified=False).where(Owner.is_identified).execute()
             logger.info("Déconnexion réussie de tous les utilisateurs")
         except Exception as e:
             logger.error(f"Erreur lors de la déconnexion: {e}")
@@ -379,7 +411,6 @@ class CommonMainWindow(QMainWindow, FWindow):
         """Ferme l'application en effectuant les nettoyages nécessaires"""
         import sys
         logger.info("Fermeture de l'application")
-        from ..models import Settings
         try:
             settings = Settings.select().where(Settings.id == 1).first()
             if settings and settings.auth_required:
@@ -397,7 +428,7 @@ class CommonMainWindow(QMainWindow, FWindow):
         settings = Settings.select().where(Settings.id == 1).first()
         
         if settings and settings.auth_required:
-            connected_owner = Owner.select().where(Owner.is_identified == True).first()
+            connected_owner = Owner.select().where(Owner.is_identified).first()
             if connected_owner and not connected_owner.is_session_valid():
                 logger.warning(f"Session expirée pour l'utilisateur: {connected_owner.username}")
                 self.logout()
@@ -408,8 +439,11 @@ class CommonMainWindow(QMainWindow, FWindow):
         try:
             logger.info("Fermeture de la fenêtre principale - nettoyage des threads")
 
-            # Sauvegarder la position/état avant fermeture
-            self._save_window_state()
+            # Sauvegarde finale (au cas où aucun event n'a été capturé pendant le drag)
+            try:
+                self._persist_toolbar_position_from_ui()
+            except Exception:
+                pass
             
             # Nettoyer manuellement les instances si elles existent
             if hasattr(self, 'status_bar') and self.status_bar:

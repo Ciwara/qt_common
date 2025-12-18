@@ -58,11 +58,6 @@ class AdminViewWidget(FWidget):
 
         self.parentWidget().setWindowTitle(CConstants.APP_NAME + "    ADMINISTRATION")
 
-        # Création de layouts séparés pour éviter les conflits
-        table_config = QVBoxLayout()
-        self.table_config = OrganizationTableWidget(parent=self)
-        table_config.addWidget(self.table_config)
-
         self.bttrestor = Button("Restaurer")
         self.bttrestor.clicked.connect(self.restorseleted)
         self.bttrestor.setEnabled(False)
@@ -87,7 +82,6 @@ class AdminViewWidget(FWidget):
 
         tab_widget = tabbox(
             (table_settings, "Paramètre"),
-            (table_config, "Gestion de l'organisation"),
             (history_table, "Historique"),
             (table_login, "Gestion d'utilisateurs"),
         )
