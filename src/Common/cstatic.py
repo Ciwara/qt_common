@@ -5,6 +5,7 @@
 
 import logging
 import os
+import re
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
@@ -47,6 +48,62 @@ peewee_logger.setLevel(logging.INFO)  # Masquer les requêtes SQL DEBUG
 
 logger.debug("Initialisation du module cstatic")
 
+
+def _version_from_metadata(dist_name: str) -> str | None:
+    try:
+        # Py 3.8+: importlib.metadata (backport intégré à partir de 3.8)
+        from importlib import metadata as importlib_metadata  # type: ignore
+
+        return importlib_metadata.version(dist_name)
+    except Exception:
+        return None
+
+
+def _version_from_pyproject() -> str | None:
+    """Lit la version depuis pyproject.toml sans dépendance TOML.
+
+    Objectif: éviter de maintenir 2 versions (UI vs package).
+    """
+    try:
+        root = Path(__file__).resolve().parents[2]  # .../qt_common/
+        pyproject = root / "pyproject.toml"
+        if not pyproject.exists():
+            return None
+
+        in_project = False
+        for raw in pyproject.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                in_project = line == "[project]"
+                continue
+            if not in_project:
+                continue
+
+            m = re.match(r'version\s*=\s*"([^"]+)"\s*$', line)
+            if m:
+                return m.group(1)
+    except Exception:
+        return None
+    return None
+
+
+def get_app_version() -> str:
+    """Retourne la version de l'app (source unique: packaging/pyproject)."""
+    # 1) si on est dans le repo (pyproject présent), c'est la référence
+    v = _version_from_pyproject()
+    if v:
+        return v
+
+    # 2) sinon (package installé), lire les métadonnées
+    v = _version_from_metadata("Common")
+    if v:
+        return v
+
+    # 3) fallback
+    return "dev"
+
 # ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # PERIODS
@@ -73,7 +130,7 @@ inco_dashboard = ""
 EMAIL_ORGA = ""
 APP_NAME = "Projet en dev"
 APP_DATE = "02/2013"
-APP_VERSION = "1.7"
+APP_VERSION = get_app_version()
 DEBUG = False
 ARMOIRE = "."
 
