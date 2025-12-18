@@ -4,6 +4,7 @@
 
 import base64
 import os
+import re
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
@@ -105,9 +106,14 @@ class LogoSelector(QWidget):
         self.browse_button = QPushButton("📂 Parcourir...")
         self.browse_button.clicked.connect(self.browse_file)
         self.browse_button.setToolTip("Sélectionner une image pour le logo de l'organisation")
+
+        self.clear_button = QPushButton("🗑️ Effacer")
+        self.clear_button.clicked.connect(self.clear)
+        self.clear_button.setToolTip("Supprimer le logo sélectionné")
         
         selector_layout.addWidget(self.path_edit)
         selector_layout.addWidget(self.browse_button)
+        selector_layout.addWidget(self.clear_button)
         
         # Widget d'aperçu amélioré
         self.preview_label = QLabel()
@@ -209,20 +215,30 @@ class LogoSelector(QWidget):
                 self.preview_label.clear()
                 self.preview_label.setText("⚠️\nAperçu\nindisponible")
         else:
-            self.base64_data = None
-            self.path_edit.setText("")
-            self.preview_label.clear()
-            self.preview_label.setText("🖼️\nAperçu du logo")
+            self.clear()
+
+    def clear(self):
+        """Réinitialise la sélection logo."""
+        self.base64_data = None
+        self.path_edit.setText("")
+        self.preview_label.clear()
+        self.preview_label.setText("🖼️\nAperçu du logo")
 
 
 class NewOrEditOrganizationViewWidget(QDialog, FWidget):
     def __init__(self, pp=None, owner=None, parent=None, *args, **kwargs):
         QDialog.__init__(self, parent, *args, **kwargs)
 
-        self.setWindowTitle("🏢 Nouvelle Organisation")
         self.parent = parent
         self.pp = pp
         self.owner = owner
+        self.organization = None
+        self.settings = None
+
+        self._load_existing()
+        self.setWindowTitle(
+            "🏢 Modifier l'organisation" if self.organization else "🏢 Nouvelle organisation"
+        )
 
         vbox = QVBoxLayout()
 
@@ -230,11 +246,51 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
         vbox.addWidget(self.organGroupBoxBtt)
         self.setLayout(vbox)
 
+        self._populate_form()
+
+    def _load_existing(self):
+        """Charge l'organisation (id=1) et les settings si disponibles."""
+        # Organization: une seule ligne attendue (id=1)
+        try:
+            self.organization = Organization.get_or_none(Organization.id == 1)
+        except Exception:
+            self.organization = None
+
+        # Settings: utiliser init_settings (création si besoin)
+        try:
+            from ..models import Settings
+
+            self.settings = Settings.init_settings()
+        except Exception:
+            self.settings = None
+
+    def _populate_form(self):
+        """Pré-remplit le formulaire en mode modification."""
+        if self.settings is not None and hasattr(self.settings, "auth_required"):
+            self.checked.setChecked(bool(self.settings.auth_required))
+        else:
+            self.checked.setChecked(True)
+
+        if not self.organization:
+            return
+
+        self.name_orga.setText(str(getattr(self.organization, "name_orga", "") or ""))
+
+        phone_val = getattr(self.organization, "phone", None)
+        self.phone.setText("" if phone_val in (None, 0) else str(phone_val))
+
+        self.bp.setText(str(getattr(self.organization, "bp", "") or ""))
+        self.email_org.setText(str(getattr(self.organization, "email_org", "") or ""))
+
+        addr = str(getattr(self.organization, "adress_org", "") or "")
+        self.adress_org.setPlainText(addr)
+
+        self.logo_orga.setText(getattr(self.organization, "logo_orga", None))
+
     def organization_group_box(self):
         self.organGroupBoxBtt = QGroupBox(self.tr("🏢 Configuration de l'organisation"))
 
         self.checked = QCheckBox("🔐 Activer l'authentification")
-        self.checked.setChecked(True)
         self.checked.setToolTip(
             "Cocher pour activer la saisie de mot de passe.\n"
             "Si désactivé, l'accès à l'application sera libre."
@@ -256,7 +312,7 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
         self.email_org.setPlaceholderText("adresse@organisation.com")
 
         formbox = QFormLayout()
-        formbox.addRow(FormLabel("🖼️ Logo de l'organisation *"), self.logo_orga)
+        formbox.addRow(FormLabel("🖼️ Logo de l'organisation"), self.logo_orga)
         formbox.addRow(FormLabel("🏢 Nom de l'organisation *"), self.name_orga)
         formbox.addRow(FormLabel("📞 Téléphone *"), self.phone)
         formbox.addRow(FormLabel("🔐 Sécurité"), self.checked)
@@ -264,12 +320,28 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
         formbox.addRow(FormLabel("📧 Email"), self.email_org)
         formbox.addRow(FormLabel("📍 Adresse complète"), self.adress_org)
 
-        butt = ButtonSave("💾 Enregistrer l'organisation")
-        butt.clicked.connect(self.save_edit)
-        butt.setToolTip("Sauvegarder les informations de l'organisation")
-        formbox.addRow("", butt)
+        # Actions
+        actions = QHBoxLayout()
+        cancel_btn = QPushButton("Annuler")
+        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.setToolTip("Fermer sans enregistrer")
+
+        save_btn = ButtonSave("💾 Enregistrer")
+        save_btn.clicked.connect(self.save_edit)
+        save_btn.setToolTip("Sauvegarder les informations de l'organisation")
+
+        actions.addStretch(1)
+        actions.addWidget(cancel_btn)
+        actions.addWidget(save_btn)
+        formbox.addRow("", actions)
 
         self.organGroupBoxBtt.setLayout(formbox)
+
+    def _validate_email(self, email: str) -> bool:
+        if not email.strip():
+            return True
+        # Validation simple (suffisante côté UI)
+        return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()))
 
     def save_edit(self):
         """Sauvegarde des informations de l'organisation"""
@@ -289,77 +361,74 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
                 "Veuillez saisir le numéro de téléphone principal."
             )
             return
-        name_orga = str(self.name_orga.text())
-        logo_base64 = self.logo_orga.text()  # Maintenant retourne le base64
-        bp = str(self.bp.text())
-        email_org = str(self.email_org.text())
-        phone = str(self.phone.text())
-        adress_org = str(self.adress_org.toPlainText())
-        
-        # 🔍 Validation et préparation des données
-        print(f"🏢 Nom organisation: {name_orga}")
-        print(f"📞 Téléphone: {phone}")
-        print(f"🖼️ Logo base64 présent: {logo_base64 is not None}")
-        print(f"🖼️ Logo widget base64_data: {self.logo_orga.base64_data is not None}")
-        
-        if logo_base64:
-            print(f"📊 Taille logo base64: {len(logo_base64)} caractères")
-            print(f"✅ Logo commence par data: {logo_base64.startswith('data:') if logo_base64 else False}")
-        elif self.logo_orga.base64_data:
-            print(f"📊 Taille logo widget: {len(self.logo_orga.base64_data)} caractères")
-            logo_base64 = self.logo_orga.base64_data  # Utiliser directement les données du widget
-        
-        print(f"💾 Logo final à sauvegarder: {logo_base64 is not None}")
 
-        org = Organization()
-        org.phone = phone
+        name_orga = str(self.name_orga.text()).strip()
+        logo_base64 = self.logo_orga.text()  # base64 (data:...) ou None
+        bp = str(self.bp.text()).strip()
+        email_org = str(self.email_org.text()).strip()
+        phone_text = str(self.phone.text()).strip()
+        adress_org = str(self.adress_org.toPlainText()).strip()
+
+        if not self._validate_email(email_org):
+            QMessageBox.warning(
+                self,
+                "⚠️ Email invalide",
+                "📧 L'adresse email semble invalide.\n\n"
+                "Exemple attendu : nom@domaine.com",
+            )
+            return
+
+        # Phone: champ IntLineEdit => digits, mais on sécurise
+        try:
+            phone_val = int(phone_text)
+        except Exception:
+            QMessageBox.warning(
+                self,
+                "⚠️ Téléphone invalide",
+                "📞 Le numéro de téléphone doit être numérique.",
+            )
+            return
+
+        # upsert org id=1 (ne pas créer plusieurs organisations)
+        org = self.organization or Organization()
+        if not getattr(org, "id", None):
+            org.id = 1
+
+        org.phone = phone_val
         org.name_orga = name_orga
-        org.logo_orga = logo_base64  # Sauvegarde du code base64 complet (pas l'URL)
-        org.email_org = email_org
-        org.bp = bp
-        org.adress_org = adress_org
-        
-        # ✅ Confirmation : nous stockons bien le code base64, pas l'URL
-        if logo_base64:
-            print(f"💾 Stockage du logo en base64 (taille: {len(logo_base64)} caractères)")
-            print(f"✅ Format valide data:image: {logo_base64.startswith('data:image')}")
-        else:
-            print("⚠️ Aucun logo base64 à sauvegarder")
-        
-        # Les champs after_cam et auth_required appartiennent à Settings, pas à Organization
-        # Mettre à jour les paramètres séparément
-        from ..models import Settings
-        settings = Settings.get(id=1)
-        settings.auth_required = True if self.checked.checkState() == Qt.Checked else False
-        settings.save()
+        org.logo_orga = logo_base64
+        org.email_org = email_org or None
+        org.bp = bp or None
+        org.adress_org = adress_org or None
+
+        # Mise à jour settings (auth_required)
+        try:
+            if self.settings is not None:
+                self.settings.auth_required = (
+                    True if self.checked.checkState() == Qt.Checked else False
+                )
+                self.settings.save()
+        except Exception:
+            # Ne pas bloquer la sauvegarde org si settings échoue
+            pass
+
         try:
             org.save()
-            
-            # ✅ Vérification de la sauvegarde
-            saved_org = Organization.get(id=org.id)
-            print(f"🆔 Organisation sauvegardée ID: {saved_org.id}")
-            print(f"🖼️ Logo sauvegardé présent: {saved_org.logo_orga is not None}")
-            if saved_org.logo_orga:
-                print(f"📊 Taille logo sauvegardé: {len(saved_org.logo_orga)} caractères")
-                print(f"✅ Format valide: {saved_org.logo_orga.startswith('data:')}")
-            
-            # 🎉 Message de succès avec informations détaillées
-            logo_info = ""
-            if saved_org.logo_orga:
-                logo_info = f"\n🖼️ Logo sauvegardé ({len(saved_org.logo_orga)} caractères)"
-            else:
-                logo_info = "\n📷 Aucun logo sélectionné"
-            
+
+            # Recharger et garder l'état "edit"
+            try:
+                self.organization = Organization.get(Organization.id == 1)
+            except Exception:
+                self.organization = org
+
             QMessageBox.information(
                 self,
                 "🎉 Succès",
-                f"✅ Organisation '{name_orga}' créée avec succès !\n\n"
-                f"📋 Informations enregistrées :\n"
+                f"✅ Organisation enregistrée avec succès.\n\n"
                 f"• Nom : {name_orga}\n"
-                f"• Téléphone : {phone}\n"
-                f"• Email : {email_org or 'Non renseigné'}\n"
-                f"• B.P. : {bp or 'Non renseigné'}"
-                f"{logo_info}"
+                f"• Téléphone : {phone_val}\n"
+                f"• Email : {email_org or '—'}\n"
+                f"• B.P. : {bp or '—'}"
             )
             self.accept()
         except Exception as e:
@@ -370,4 +439,7 @@ class NewOrEditOrganizationViewWidget(QDialog, FWidget):
                 f"Détails techniques : {e}\n\n"
                 f"Veuillez réessayer ou contacter le support technique."
             )
-            print(f"❌ Erreur sauvegarde organisation: {e}")
+            try:
+                print(f"❌ Erreur sauvegarde organisation: {e}")
+            except Exception:
+                pass
