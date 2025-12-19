@@ -439,6 +439,15 @@ class CommonMainWindow(QMainWindow, FWindow):
         try:
             logger.info("Fermeture de la fenêtre principale - nettoyage des threads")
 
+            # Sauvegarde de la base de données avant fermeture
+            try:
+                from ..exports import save_database_on_exit
+                logger.info("💾 Sauvegarde de la base de données avant fermeture...")
+                # Passer self comme parent pour afficher les boîtes de dialogue
+                save_database_on_exit(max_backups=10, parent=self)
+            except Exception as backup_error:
+                logger.warning(f"Impossible d'effectuer la sauvegarde automatique: {backup_error}")
+
             # Sauvegarde finale (au cas où aucun event n'a été capturé pendant le drag)
             try:
                 self._persist_toolbar_position_from_ui()

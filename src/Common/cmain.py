@@ -39,6 +39,15 @@ from .ui.window import FWindow
 def cleanup():
     """Fonction de nettoyage appelée à la fermeture de l'application"""
     try:
+        logger.info("💾 Sauvegarde de la base de données avant fermeture...")
+        # Sauvegarder la base de données avant de la fermer
+        try:
+            from .exports import save_database_on_exit
+            # Note: parent=None car on est dans atexit, pas de fenêtre disponible
+            save_database_on_exit(max_backups=10, parent=None)
+        except Exception as backup_error:
+            logger.warning(f"Impossible d'effectuer la sauvegarde automatique: {backup_error}")
+        
         logger.info("Fermeture de la base de données")
         if dbh is not None and not dbh.is_closed():
             dbh.close()
