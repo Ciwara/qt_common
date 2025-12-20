@@ -39,6 +39,7 @@ class LogHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.search_pattern = None
+        self.regex = None  # Initialiser regex pour éviter AttributeError
         self.highlight_format = QTextCharFormat()
         self.highlight_format.setBackground(QColor(255, 255, 0, 100))  # Jaune transparent
         self.highlight_format.setForeground(QColor(0, 0, 0))
@@ -263,7 +264,7 @@ class LogViewerWidget(QDialog, FWidget):
         # ========== ZONE DE LOGS ==========
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setFont(QFont("Courier", self.font_size))
+        self.log_text.setFont(QFont("Courier New", self.font_size))
         self.log_text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         
         # Configuration des couleurs pour les niveaux de log
@@ -701,7 +702,7 @@ class LogViewerWidget(QDialog, FWidget):
     
     def update_font_size(self):
         """Met à jour la taille de police"""
-        font = QFont("Courier", self.font_size)
+        font = QFont("Courier New", self.font_size)
         self.log_text.setFont(font)
         self.zoom_label.setText(f"{self.font_size}pt")
     

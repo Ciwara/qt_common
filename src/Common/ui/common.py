@@ -240,7 +240,7 @@ class ErrorLabel(FLabel):
         self.setFont(font)
         red = QColor(Qt.GlobalColor.red)
         palette = QPalette()
-        palette.setColor(QPalette.WindowText, red)
+        palette.setColor(QPalette.ColorRole.WindowText, red)
         self.setPalette(palette)
         self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 

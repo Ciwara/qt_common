@@ -66,7 +66,8 @@ class DBCleanerWidget(QDialog, FWidget):
         self.username_field = self.box_username
         # password field
         self.password_field = EnterTabbedLineEdit()
-        self.password_field.setEchoMode(LineEdit.Password)
+        from PyQt6.QtWidgets import QLineEdit
+        self.password_field.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_field.setFocus()
         # login button
         self.login_button = DeletedBtt("&Supprimer")

@@ -945,9 +945,10 @@ def init_database():
         logger.info("Paramètres par défaut initialisés")
         
         # Initialisation des enregistrements par défaut
+        # IMPORTANT: L'ordre est crucial - l'organisation doit être créée avant l'utilisateur
         init_default_version()
-        init_default_organization()
-        init_default_superuser()
+        init_default_organization()  # Créer l'organisation en premier
+        init_default_superuser()  # Créer l'utilisateur après l'organisation
         
         return True
     except Exception as e:

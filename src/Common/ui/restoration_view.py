@@ -56,7 +56,8 @@ class RestorationViewWidget(QDialog, FWidget):
         self.mail_field.setPlaceholderText("votre.email@exemple.com")
         
         self.password_field = EnterTabbedLineEdit()
-        self.password_field.setEchoMode(LineEdit.Password)
+        from PyQt6.QtWidgets import QLineEdit
+        self.password_field.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_field.setPlaceholderText("Mot de passe de votre compte cloud")
         self.password_field.setFocus()
 
@@ -118,6 +119,7 @@ class RestorationViewWidget(QDialog, FWidget):
     def ignore_resto(self):
         """Ignorer la restauration et commencer une nouvelle installation"""
         from PyQt6.QtWidgets import QMessageBox
+        from .organization_add_or_edit import NewOrEditOrganizationViewWidget
         
         reply = QMessageBox.question(
             self,
@@ -135,7 +137,15 @@ class RestorationViewWidget(QDialog, FWidget):
         
         if reply == QMessageBox.StandardButton.Yes:
             print("🚀 Nouvelle installation confirmée - aucune restauration")
-            self.accept()
+            
+            # Ouvrir le dialogue de création d'organisation
+            org_dialog = NewOrEditOrganizationViewWidget(parent=self)
+            if org_dialog.exec() == QDialog.DialogCode.Accepted:
+                print("✅ Organisation créée avec succès")
+                self.accept()
+            else:
+                print("❌ Création d'organisation annulée")
+                # Ne pas fermer le dialogue de restauration si l'organisation n'a pas été créée
         else:
             print("❌ Nouvelle installation annulée")
 
