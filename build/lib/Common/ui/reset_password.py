@@ -147,14 +147,13 @@ class ResetPasswordDialog(QDialog, FWidget):
         
         # Champ nouveau mot de passe
         self.password_field = EnterTabbedLineEdit()
-        from PyQt6.QtWidgets import QLineEdit
-        self.password_field.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_field.setEchoMode(LineEdit.Password)
         self.password_field.setPlaceholderText("Nouveau mot de passe")
         self.password_field.setToolTip("Entrez votre nouveau mot de passe")
         
         # Champ confirmation
         self.confirm_field = EnterTabbedLineEdit()
-        self.confirm_field.setEchoMode(QLineEdit.EchoMode.Password)
+        self.confirm_field.setEchoMode(LineEdit.Password)
         self.confirm_field.setPlaceholderText("Confirmez le mot de passe")
         self.confirm_field.setToolTip("Confirmez votre nouveau mot de passe")
         

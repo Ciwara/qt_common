@@ -382,25 +382,19 @@ Fichier à relancer: {main_file}"""
 
     # Aide
     def goto_help(self):
-        """Ouvre la page d'aide complète"""
-        from .helps_page import HelpPageWidget
-        try:
-            self.open_dialog(HelpPageWidget, modal=True)
-        except Exception as e:
-            logger.error(f"Erreur lors de l'ouverture de la page d'aide: {e}")
-            # Fallback vers un message simple
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(
-                self.parent,
-                "Aide",
-                f"""
-                <h2>Aide - {CConstants.APP_NAME}</h2>
-                <hr>
-                <p><b>Version:</b> {CConstants.APP_VERSION}</p>
-                <p><b>Description:</b> Application de gestion</p>
-                <p>Pour plus d'informations, consultez la documentation.</p>
-                """
-            )
+        # html_view n'existe pas, on peut soit créer une aide simple, soit désactiver cette fonction
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self.parent,
+            "Aide",
+            f"""
+            <h2>Aide - {CConstants.APP_NAME}</h2>
+            <hr>
+            <p><b>Version:</b> {CConstants.APP_VERSION}</p>
+            <p><b>Description:</b> Application de gestion</p>
+            <p>Pour plus d'informations, consultez la documentation.</p>
+            """
+        )
 
     def open_logo_file(self):
         """Ouvre le visualiseur de logs intégré"""

@@ -62,9 +62,8 @@ class FTableWidget(QTableWidget):
         self.verticalHeader().setVisible(False)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
-        # Utiliser les couleurs de la palette système pour s'adapter au thème (clair/sombre)
-        # palette(text) s'adapte automatiquement au thème clair/sombre
-        self.setStyleSheet("color: palette(text);")
+        # style au tr
+        self.setStyleSheet("color: #2C2C2C;")
         self.setAlternatingRowColors(True)
         self.setAutoScroll(True)
         self.wc = self.width()
