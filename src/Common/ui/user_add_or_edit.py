@@ -5,7 +5,7 @@
 
 from peewee import IntegrityError
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QCheckBox, QComboBox, QDialog, QFormLayout, QVBoxLayout
+from PyQt6.QtWidgets import QCheckBox, QComboBox, QDialog, QFormLayout, QLineEdit, QVBoxLayout
 
 from ..models import Owner
 from .common import Button, ButtonSave, FLabel, FWidget, IntLineEdit, LineEdit
@@ -32,9 +32,9 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
             self.title = f"✏️ Modification de l'utilisateur {self.owner.username}"
             self.succes_msg = f"✅ L'utilisateur '{self.owner.username}' a été mis à jour avec succès"
             if self.owner.isactive:
-                self.checked.setCheckState(Qt.Checked)
+                self.checked.setCheckState(Qt.CheckState.Checked)
         else:
-            self.checked.setCheckState(Qt.Checked)
+            self.checked.setCheckState(Qt.CheckState.Checked)
             self.new = True
             self.succes_msg = "🎉 Nouvel utilisateur créé avec succès"
             self.title = "👤 Création d'un nouvel utilisateur"
@@ -48,12 +48,12 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         self.username_field.setToolTip("Identifiant unique pour la connexion" if self.new else "L'identifiant ne peut pas être modifié")
         
         self.password_field = LineEdit()
-        self.password_field.setEchoMode(LineEdit.PasswordEchoOnEdit)
+        self.password_field.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
         self.password_field.setPlaceholderText("Mot de passe sécurisé")
         self.password_field.setToolTip("Saisissez un mot de passe fort (min. 6 caractères recommandés)")
         
         self.password_field_v = LineEdit()
-        self.password_field_v.setEchoMode(LineEdit.PasswordEchoOnEdit)
+        self.password_field_v.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
         self.password_field_v.setPlaceholderText("Confirmer le mot de passe")
         self.password_field_v.setToolTip("Resaisissez le même mot de passe pour confirmation")
         self.password_field_v.textChanged.connect(self.check_password_is_valide)
@@ -219,7 +219,7 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         password = str(self.password_field.text()).strip()
         phone = str(self.phone_field.text())
         group = self.liste_group[self.box_group.currentIndex()]
-        status = self.checked.checkState() == Qt.Checked
+        status = self.checked.checkState() == Qt.CheckState.Checked
 
         # 📋 Logging des informations
         action = "Création" if self.new else "Modification"

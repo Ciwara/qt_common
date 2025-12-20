@@ -7,13 +7,15 @@ import errno
 import os
 import platform
 import shutil
+import sqlite3
 from datetime import datetime
 
 import psutil
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
-from .models import DB_FILE, Organization, Version
+from .models import DB_FILE, Organization, Version, dbh, init_database
 from .ui.util import get_lcse_file, raise_error, raise_success, uopen_file
+from .cstatic import logger
 
 DATETIME = f"{datetime.now().strftime('%m-%d-%Y_%Hh%Mm%Ss')}"
 
@@ -83,44 +85,349 @@ def export_backup(folder=None, dst_folder=None):
         )
 
 
-def import_backup(folder=None, dst_folder=None):
+def validate_sqlite_database(db_path):
+    """
+    Valide qu'un fichier est une base de données SQLite valide et vérifie son intégrité.
+    
+    Args:
+        db_path (str): Chemin vers le fichier de base de données
+        
+    Returns:
+        tuple: (is_valid: bool, integrity_check: str, error_message: str)
+    """
     try:
-        # Determine the current database file path
-        path_db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_FILE)
+        # Vérifier que le fichier existe
+        if not os.path.exists(db_path):
+            return False, None, "Le fichier n'existe pas"
+        
+        # Vérifier que c'est un fichier (pas un répertoire)
+        if not os.path.isfile(db_path):
+            return False, None, "Le chemin spécifié n'est pas un fichier"
+        
+        # Vérifier la taille du fichier (doit être > 0)
+        if os.path.getsize(db_path) == 0:
+            return False, None, "Le fichier est vide"
+        
+        # Vérifier que c'est une base SQLite valide en essayant de l'ouvrir
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Vérifier l'intégrité de la base de données
+            cursor.execute("PRAGMA integrity_check")
+            integrity_result = cursor.fetchone()
+            
+            # Vérifier que la base de données contient des tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = cursor.fetchall()
+            
+            conn.close()
+            
+            # Vérifier l'intégrité
+            if integrity_result and integrity_result[0] != "ok":
+                return False, integrity_result[0], f"La base de données est corrompue: {integrity_result[0]}"
+            
+            # Vérifier qu'il y a au moins une table
+            if not tables:
+                return False, None, "La base de données ne contient aucune table"
+            
+            return True, "ok", None
+            
+        except sqlite3.Error as e:
+            return False, None, f"Erreur SQLite: {str(e)}"
+        except Exception as e:
+            return False, None, f"Erreur lors de la validation: {str(e)}"
+            
+    except Exception as e:
+        return False, None, f"Erreur lors de la validation du fichier: {str(e)}"
 
-        # Create a backup of the current database
-        backup_file_name = "Avant-{}-{}.db".format(os.path.basename(DB_FILE), DATETIME)
-        backup_file_path = os.path.join(os.path.dirname(path_db_file), backup_file_name)
-        shutil.copy(path_db_file, backup_file_path)
 
-        # Open the file dialog to select the new database file
+def get_database_info(db_path):
+    """
+    Récupère des informations sur une base de données SQLite.
+    
+    Args:
+        db_path (str): Chemin vers le fichier de base de données
+        
+    Returns:
+        dict: Dictionnaire contenant les informations (taille, date, nombre de tables, etc.)
+    """
+    info = {
+        'path': db_path,
+        'size': 0,
+        'size_mb': 0,
+        'modified': None,
+        'tables_count': 0,
+        'tables': [],
+        'version': None,
+        'organization': None
+    }
+    
+    try:
+        # Informations sur le fichier
+        if os.path.exists(db_path):
+            stat = os.stat(db_path)
+            info['size'] = stat.st_size
+            info['size_mb'] = round(stat.st_size / (1024 * 1024), 2)
+            info['modified'] = datetime.fromtimestamp(stat.st_mtime)
+        
+        # Informations sur la base de données
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Compter les tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = cursor.fetchall()
+            info['tables_count'] = len(tables)
+            info['tables'] = [table[0] for table in tables]
+            
+            # Essayer de récupérer la version et l'organisation si les tables existent
+            try:
+                cursor.execute("SELECT display_name FROM version WHERE id=1")
+                version_result = cursor.fetchone()
+                if version_result:
+                    info['version'] = version_result[0]
+            except:
+                pass
+            
+            try:
+                cursor.execute("SELECT name_orga FROM organization WHERE id=1")
+                org_result = cursor.fetchone()
+                if org_result:
+                    info['organization'] = org_result[0]
+            except:
+                pass
+            
+            conn.close()
+        except:
+            pass
+            
+    except Exception as e:
+        logger.warning(f"Erreur lors de la récupération des informations de la base de données: {e}")
+    
+    return info
+
+
+def import_backup(folder=None, dst_folder=None):
+    """
+    Importe une sauvegarde de base de données avec validation et vérification d'intégrité.
+    
+    Args:
+        folder: Dossier source (non utilisé actuellement)
+        dst_folder: Dossier de destination (non utilisé actuellement)
+    """
+    try:
+        # Déterminer le chemin absolu du fichier de base de données actuel
+        # Utiliser DB_FILE directement qui devrait être un chemin absolu ou relatif
+        if os.path.isabs(DB_FILE):
+            path_db_file = DB_FILE
+        else:
+            # Si c'est un chemin relatif, le résoudre depuis le répertoire de travail
+            path_db_file = os.path.abspath(DB_FILE)
+        
+        logger.info(f"Import de la base de données - Fichier actuel: {path_db_file}")
+        
+        # Vérifier que le fichier de base de données actuel existe
+        if not os.path.exists(path_db_file):
+            logger.warning(f"Le fichier de base de données actuel n'existe pas: {path_db_file}")
+            # Créer le répertoire parent si nécessaire
+            os.makedirs(os.path.dirname(path_db_file), exist_ok=True)
+        
+        # Ouvrir le dialogue de sélection de fichier
         file_dialog = QFileDialog()
         name_select_f, _ = file_dialog.getOpenFileName(
-            QWidget(), "Open Data File", "", "Database Files (*.db)"
+            QWidget(), 
+            "📂 Sélectionner le fichier de sauvegarde à importer", 
+            "", 
+            "Fichiers de base de données (*.db);;Tous les fichiers (*)"
         )
 
-        # If the user selects a file
-        if name_select_f:
-            # Replace the current database with the selected file
-            shutil.copy(name_select_f, path_db_file)
+        # Si l'utilisateur n'a pas sélectionné de fichier
+        if not name_select_f:
+            logger.info("Import annulé - aucun fichier sélectionné")
+            return
 
-            raise_success(
-                "Restoration des Données.",
-                """Les données ont été correctement restaurées.
-                La version actuelle de la base de données est {}""".format(
-                    Version().get(id=1).display_name()
-                ),
-            )
-        else:
+        logger.info(f"Fichier sélectionné pour l'import: {name_select_f}")
+        
+        # Valider le fichier sélectionné
+        is_valid, integrity_check, error_msg = validate_sqlite_database(name_select_f)
+        
+        if not is_valid:
             raise_error(
-                "Aucun fichier sélectionné.",
-                "Vous devez sélectionner un fichier pour restaurer la base de données.",
+                "❌ Fichier de base de données invalide",
+                f"Le fichier sélectionné n'est pas une base de données SQLite valide.\n\n"
+                f"Erreur: {error_msg}\n\n"
+                f"Veuillez sélectionner un fichier de sauvegarde valide."
             )
+            return
+        
+        logger.info(f"Validation réussie - Intégrité: {integrity_check}")
+        
+        # Récupérer les informations sur la base de données à importer
+        db_info = get_database_info(name_select_f)
+        
+        # Récupérer les informations sur la base de données actuelle (si elle existe)
+        current_db_info = None
+        if os.path.exists(path_db_file):
+            current_db_info = get_database_info(path_db_file)
+        
+        # Préparer le message de confirmation avec les informations
+        confirm_message = f"📊 Informations sur la sauvegarde à importer:\n\n"
+        confirm_message += f"📁 Fichier: {os.path.basename(name_select_f)}\n"
+        confirm_message += f"💾 Taille: {db_info['size_mb']} MB\n"
+        if db_info['modified']:
+            confirm_message += f"📅 Date de modification: {db_info['modified'].strftime('%d/%m/%Y %H:%M:%S')}\n"
+        confirm_message += f"📋 Nombre de tables: {db_info['tables_count']}\n"
+        if db_info['version']:
+            confirm_message += f"🔖 Version: {db_info['version']}\n"
+        if db_info['organization']:
+            confirm_message += f"🏢 Organisation: {db_info['organization']}\n"
+        
+        if current_db_info:
+            confirm_message += f"\n⚠️ ATTENTION:\n"
+            confirm_message += f"• La base de données actuelle sera remplacée\n"
+            confirm_message += f"• Une sauvegarde sera créée avant l'import\n"
+            confirm_message += f"• Cette action ne peut pas être annulée\n"
+        else:
+            confirm_message += f"\n⚠️ ATTENTION:\n"
+            confirm_message += f"• Une nouvelle base de données sera créée\n"
+            confirm_message += f"• Cette action ne peut pas être annulée\n"
+        
+        confirm_message += f"\n💡 Voulez-vous continuer avec l'import ?"
+        
+        # Demander confirmation à l'utilisateur
+        reply = QMessageBox.question(
+            QWidget(),
+            "💾 Confirmer l'import de la base de données",
+            confirm_message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            logger.info("Import annulé par l'utilisateur")
+            return
+        
+        # Fermer la connexion à la base de données actuelle si elle est ouverte
+        if dbh is not None and not dbh.is_closed():
+            logger.info("Fermeture de la connexion à la base de données actuelle")
+            try:
+                dbh.close()
+            except Exception as e:
+                logger.warning(f"Erreur lors de la fermeture de la base de données: {e}")
+        
+        # Créer une sauvegarde de la base de données actuelle (si elle existe)
+        backup_file_path = None
+        if os.path.exists(path_db_file):
+            try:
+                backup_file_name = "Avant-{}-{}.db".format(
+                    os.path.basename(DB_FILE).replace('.db', ''), 
+                    DATETIME
+                )
+                backup_dir = os.path.dirname(path_db_file)
+                backup_file_path = os.path.join(backup_dir, backup_file_name)
+                
+                logger.info(f"Création d'une sauvegarde: {backup_file_path}")
+                shutil.copy2(path_db_file, backup_file_path)
+                logger.info("✅ Sauvegarde créée avec succès")
+            except Exception as e:
+                logger.error(f"Erreur lors de la création de la sauvegarde: {e}")
+                raise_error(
+                    "❌ Erreur de sauvegarde",
+                    f"Impossible de créer une sauvegarde de la base de données actuelle.\n\n"
+                    f"Erreur: {str(e)}\n\n"
+                    f"L'import a été annulé pour éviter la perte de données."
+                )
+                return
+        
+        # Copier le fichier sélectionné vers la base de données actuelle
+        try:
+            logger.info(f"Copie du fichier de sauvegarde vers: {path_db_file}")
+            # Créer le répertoire parent si nécessaire
+            os.makedirs(os.path.dirname(path_db_file), exist_ok=True)
+            shutil.copy2(name_select_f, path_db_file)
+            logger.info("✅ Fichier copié avec succès")
+        except Exception as e:
+            logger.error(f"Erreur lors de la copie du fichier: {e}")
+            
+            # Essayer de restaurer la sauvegarde si elle existe
+            if backup_file_path and os.path.exists(backup_file_path):
+                try:
+                    logger.warning("Tentative de restauration de la sauvegarde")
+                    shutil.copy2(backup_file_path, path_db_file)
+                except:
+                    pass
+            
+            raise_error(
+                "❌ Erreur lors de l'import",
+                f"Une erreur s'est produite lors de la copie du fichier.\n\n"
+                f"Erreur: {str(e)}\n\n"
+                f"Vérifiez que:\n"
+                f"• Vous avez les droits d'écriture\n"
+                f"• Il y a suffisamment d'espace disque\n"
+                f"• Le fichier n'est pas utilisé par une autre application"
+            )
+            return
+        
+        # Réinitialiser la connexion à la base de données
+        try:
+            logger.info("Réinitialisation de la connexion à la base de données")
+            # Réinitialiser la variable globale dbh
+            init_database()
+            logger.info("✅ Base de données réinitialisée")
+        except Exception as e:
+            logger.error(f"Erreur lors de la réinitialisation de la base de données: {e}")
+            raise_error(
+                "⚠️ Import réussi mais erreur de réinitialisation",
+                f"Le fichier a été importé avec succès, mais une erreur s'est produite lors de la réinitialisation.\n\n"
+                f"Erreur: {str(e)}\n\n"
+                f"Veuillez redémarrer l'application."
+            )
+            return
+        
+        # Récupérer la version de la base de données importée
+        try:
+            version_info = Version.get(id=1).display_name()
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer la version: {e}")
+            version_info = "Version inconnue"
+        
+        # Message de succès
+        success_message = f"✅ Les données ont été correctement importées.\n\n"
+        success_message += f"📊 Informations:\n"
+        success_message += f"• Version: {version_info}\n"
+        if db_info['organization']:
+            success_message += f"• Organisation: {db_info['organization']}\n"
+        if backup_file_path:
+            success_message += f"• Sauvegarde créée: {os.path.basename(backup_file_path)}\n"
+        success_message += f"\n💡 Vous pouvez maintenant utiliser l'application avec les nouvelles données."
+        
+        raise_success(
+            "✅ Importation réussie",
+            success_message
+        )
+        
+        logger.info("✅ Import de la base de données terminé avec succès")
 
-    except IOError:
+    except IOError as e:
+        logger.error(f"Erreur IO lors de l'import: {e}")
         raise_error(
-            "La restauration a échoué.",
-            "Une erreur s'est produite lors de la copie des fichiers. Veuillez vérifier le fichier sélectionné et réessayer.",
+            "❌ Erreur de fichier",
+            f"Une erreur s'est produite lors de l'accès aux fichiers.\n\n"
+            f"Erreur: {str(e)}\n\n"
+            f"Vérifiez que:\n"
+            f"• Le fichier sélectionné est accessible\n"
+            f"• Vous avez les droits de lecture/écriture\n"
+            f"• Le fichier n'est pas corrompu"
+        )
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors de l'import: {e}", exc_info=True)
+        raise_error(
+            "❌ Erreur lors de l'import",
+            f"Une erreur inattendue s'est produite.\n\n"
+            f"Erreur: {str(e)}\n\n"
+            f"Veuillez contacter le support si le problème persiste."
         )
 
 

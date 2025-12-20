@@ -4,7 +4,7 @@
 # maintainer: Fad
 
 from PyQt6.QtGui import QIcon, QPixmap, QAction
-from PyQt6.QtWidgets import QMenuBar, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
@@ -156,7 +156,22 @@ class FMenuBar(QMenuBar, FWidget):
         # Comptes utilisateur
         admin = self.file_.addMenu("&Outils")
 
-        preference = self.addMenu("&Préference")
+        # Menu Paramètres/Préférences (fusionné)
+        preference = self.addMenu("&Paramètres")
+        
+        # Action Préférences
+        preferences_action = QAction("⚙️ Préférences", self)
+        preferences_action.triggered.connect(self.open_preferences)
+        preference.addAction(preferences_action)
+        
+        # Action Thème
+        theme_action = QAction("🎨 Thème", self)
+        theme_action.triggered.connect(self.change_theme)
+        preference.addAction(theme_action)
+        
+        # Séparateur avant le menu administration
+        preference.addSeparator()
+        
         # Gestion du menu administrateur - Tous les administrateurs doivent avoir accès
         try:
             # Récupérer l'utilisateur connecté
@@ -202,10 +217,14 @@ class FMenuBar(QMenuBar, FWidget):
         lock.setToolTip("Verrouiller l'application")
         lock.triggered.connect(self.logout)
         self.file_.addAction(lock)
-        # R
-        log_file = QAction(QIcon(), "Log ", self)
-        log_file.setShortcut("Ctrl+l")
-        # log_file.setToolTip(u"Verrouiller l'application")
+        # Visualiseur de logs
+        log_file = QAction(
+            QIcon(f"{CConstants.img_cmedia}info.png"), 
+            "📋 Visualiser les logs", 
+            self
+        )
+        log_file.setShortcut("Ctrl+L")
+        log_file.setToolTip("Ouvrir le visualiseur de logs de l'application")
         log_file.triggered.connect(self.open_logo_file)
         admin.addAction(log_file)
 
@@ -378,12 +397,29 @@ Fichier à relancer: {main_file}"""
         )
 
     def open_logo_file(self):
-        from .util import uopen_file
-
+        """Ouvre le visualiseur de logs intégré"""
+        from .log_viewer import LogViewerWidget
+        
         try:
-            uopen_file(CConstants.NAME_MAIN.replace(".py", ".log"))
+            self.open_dialog(LogViewerWidget, modal=True)
         except Exception as e:
-            logger.error(f"Erreur lors de l'ouverture du fichier log: {e}")
+            logger.error(f"Erreur lors de l'ouverture du visualiseur de logs: {e}")
+            # Fallback vers l'ouverture avec l'application par défaut
+            try:
+                from .util import uopen_file
+                from pathlib import Path
+                log_file = Path(__file__).parent.parent.parent / 'logs' / 'app.log'
+                if log_file.exists():
+                    uopen_file(str(log_file))
+                else:
+                    from PyQt6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self.parent,
+                        "Fichier log introuvable",
+                        f"Le fichier de log n'a pas été trouvé:\n{log_file}"
+                    )
+            except Exception as e2:
+                logger.error(f"Erreur lors de l'ouverture du fichier log: {e2}")
 
     # About
     def update_user_menu(self):
@@ -484,15 +520,15 @@ Fichier à relancer: {main_file}"""
     def update_admin_menu(self):
         """Met à jour le menu administration selon les droits de l'utilisateur connecté"""
         try:
-            # Trouver le menu Préférence
+            # Trouver le menu Paramètres
             preference_menu = None
             for action in self.actions():
-                if action.menu() and action.text() == "&Préference":
+                if action.menu() and (action.text() == "&Paramètres" or action.text() == "&Préference"):
                     preference_menu = action.menu()
                     break
             
             if not preference_menu:
-                logger.warning("Menu Préférence non trouvé")
+                logger.warning("Menu Paramètres non trouvé")
                 return
             
             # Supprimer l'ancien menu administration s'il existe
@@ -525,6 +561,49 @@ Fichier à relancer: {main_file}"""
                 logger.debug("Aucun utilisateur connecté - menu admin non ajouté")
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du menu administration: {e}")
+
+    def change_theme(self):
+        """Ouvre le dialogue de sélection de thème"""
+        try:
+            # Essayer d'importer depuis le projet spécifique
+            from ui.theme_selector import ThemeSelectorDialog
+        except ImportError:
+            # Si l'import échoue, essayer depuis Common
+            try:
+                from .theme_selector import ThemeSelectorDialog
+            except ImportError:
+                # Si les deux échouent, afficher un message
+                QMessageBox.information(
+                    self.parent,
+                    "Thème",
+                    "Le sélecteur de thème n'est pas disponible dans cette application."
+                )
+                return
+        
+        dialog = ThemeSelectorDialog(self.parent)
+        dialog.exec()
+        
+        # Rafraîchir l'application après changement de thème
+        app = QApplication.instance()
+        if app:
+            # Mettre à jour toutes les fenêtres
+            for widget in app.allWidgets():
+                if hasattr(widget, 'setPalette'):
+                    widget.setPalette(app.palette())
+                    widget.update()
+
+    def open_preferences(self):
+        """Ouvre la fenêtre des préférences."""
+        try:
+            from .preferences import PreferencesDialog
+            dlg = PreferencesDialog(self.parent)
+            dlg.exec()
+        except ImportError:
+            QMessageBox.warning(
+                self.parent,
+                "Préférences",
+                "Le dialogue de préférences n'est pas disponible."
+            )
 
     def goto_about(self):
         QMessageBox.about(

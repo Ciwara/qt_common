@@ -485,11 +485,39 @@ class License(BaseModel):
         self.save()
 
     def remaining_days(self):
-        return (
-            f"{self.expiration_date - datetime.now()} jours"
-            if self.can_expired
-            else "illimité"
-        )
+        """Retourne le nombre de jours restants avant expiration"""
+        if not self.can_expired or not self.expiration_date:
+            return "illimité"
+        
+        remaining = self.expiration_date - datetime.now()
+        if remaining.total_seconds() <= 0:
+            return "expiré"
+        
+        days = remaining.days
+        return f"{days} jour{'s' if days > 1 else ''}"
+    
+    def get_remaining_time_detailed(self):
+        """Retourne le temps restant détaillé (jours, heures, minutes)"""
+        if not self.can_expired or not self.expiration_date:
+            return None, None, None
+        
+        remaining = self.expiration_date - datetime.now()
+        if remaining.total_seconds() <= 0:
+            return 0, 0, 0
+        
+        days = remaining.days
+        hours = remaining.seconds // 3600
+        minutes = (remaining.seconds % 3600) // 60
+        
+        return days, hours, minutes
+    
+    def is_expiring_soon(self, days_threshold=7):
+        """Vérifie si la licence expire bientôt"""
+        if not self.can_expired or not self.expiration_date:
+            return False
+        
+        remaining = self.expiration_date - datetime.now()
+        return 0 < remaining.total_seconds() <= timedelta(days=days_threshold).total_seconds()
 
 
 class Version(BaseModel):
