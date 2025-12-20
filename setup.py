@@ -6,7 +6,7 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
-        "PyQt5",
+        "PyQt6>=6.0.0",
         "peewee",
     ],
     python_requires=">=3.6",

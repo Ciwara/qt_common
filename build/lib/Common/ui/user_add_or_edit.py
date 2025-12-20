@@ -240,21 +240,9 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
             self.close()
             self.accept()
             
-            # 🎉 Messages de succès et rafraîchissement
+            # 🎉 Messages de succès
             if self.pp:
-                # Rafraîchir la liste des utilisateurs
-                if hasattr(self.pp, 'refresh_'):
-                    self.pp.refresh_()
-                # Si pp est InfoTableWidget, rafraîchir aussi la liste parente
-                if hasattr(self.pp, 'parent') and hasattr(self.pp.parent, 'table_owner'):
-                    self.pp.parent.table_owner.refresh_()
-                    # Mettre à jour les statistiques
-                    if hasattr(self.pp.parent, 'update_stats'):
-                        self.pp.parent.update_stats()
-                    # Rafraîchir les détails si l'utilisateur modifié est sélectionné
-                    if hasattr(self.pp, 'owner') and self.pp.owner and self.pp.owner.id == ow.id:
-                        self.pp.refresh_(ow)
-                
+                self.pp.refresh_()
                 print(f"✅ Utilisateur sauvegardé avec succès - parent: {self.parent}")
                 
                 if self.parent:
@@ -271,10 +259,6 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
                     )
                     
                     self.parent.Notify(success_message, "success")
-                    
-                    # Mettre à jour les statistiques si disponible (via la fenêtre principale)
-                    if hasattr(self.parent, 'update_stats'):
-                        self.parent.update_stats()
                     
         except IntegrityError as e:
             print(f"❌ Erreur d'intégrité - utilisateur '{username}' existe déjà")

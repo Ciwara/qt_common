@@ -202,14 +202,10 @@ class FMenuBar(QMenuBar, FWidget):
         lock.setToolTip("Verrouiller l'application")
         lock.triggered.connect(self.logout)
         self.file_.addAction(lock)
-        # Visualiseur de logs
-        log_file = QAction(
-            QIcon(f"{CConstants.img_cmedia}info.png"), 
-            "📋 Visualiser les logs", 
-            self
-        )
-        log_file.setShortcut("Ctrl+L")
-        log_file.setToolTip("Ouvrir le visualiseur de logs de l'application")
+        # R
+        log_file = QAction(QIcon(), "Log ", self)
+        log_file.setShortcut("Ctrl+l")
+        # log_file.setToolTip(u"Verrouiller l'application")
         log_file.triggered.connect(self.open_logo_file)
         admin.addAction(log_file)
 
@@ -382,29 +378,12 @@ Fichier à relancer: {main_file}"""
         )
 
     def open_logo_file(self):
-        """Ouvre le visualiseur de logs intégré"""
-        from .log_viewer import LogViewerWidget
-        
+        from .util import uopen_file
+
         try:
-            self.open_dialog(LogViewerWidget, modal=True)
+            uopen_file(CConstants.NAME_MAIN.replace(".py", ".log"))
         except Exception as e:
-            logger.error(f"Erreur lors de l'ouverture du visualiseur de logs: {e}")
-            # Fallback vers l'ouverture avec l'application par défaut
-            try:
-                from .util import uopen_file
-                from pathlib import Path
-                log_file = Path(__file__).parent.parent.parent / 'logs' / 'app.log'
-                if log_file.exists():
-                    uopen_file(str(log_file))
-                else:
-                    from PyQt6.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self.parent,
-                        "Fichier log introuvable",
-                        f"Le fichier de log n'a pas été trouvé:\n{log_file}"
-                    )
-            except Exception as e2:
-                logger.error(f"Erreur lors de l'ouverture du fichier log: {e2}")
+            logger.error(f"Erreur lors de l'ouverture du fichier log: {e}")
 
     # About
     def update_user_menu(self):
