@@ -23,19 +23,43 @@ formatter = logging.Formatter(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+
+class StartupLogFilter(logging.Filter):
+    """Filtre pour ne garder que les logs de démarrage et les erreurs"""
+    
+    # Mots-clés qui indiquent un log de démarrage
+    STARTUP_KEYWORDS = [
+        'initialisation', 'démarrage', 'connexion', 'base de données',
+        'database', 'migration', 'paramètres', 'settings', 'version',
+        'organisation', 'superuser', 'tables créées', 'connectée',
+        'modules', 'chargés', 'fermeture', 'sauvegarde'
+    ]
+    
+    def filter(self, record):
+        """Filtre les logs pour ne garder que les infos de démarrage et les erreurs"""
+        # Toujours garder les erreurs et warnings
+        if record.levelno >= logging.WARNING:
+            return True
+        
+        # Pour les logs INFO et DEBUG, vérifier s'ils contiennent des mots-clés de démarrage
+        message_lower = record.getMessage().lower()
+        return any(keyword in message_lower for keyword in self.STARTUP_KEYWORDS)
+
+
 # Handler pour la console
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
 
-# Handler pour le fichier de log
+# Handler pour le fichier de log (uniquement infos de démarrage et erreurs)
 file_handler = RotatingFileHandler(
     log_dir / 'app.log',
     maxBytes=1024*1024,  # 1MB
     backupCount=5,
     encoding='utf-8'
 )
-file_handler.setLevel(logging.DEBUG)
+file_handler.setLevel(logging.INFO)  # Niveau INFO pour capturer les infos de démarrage
+file_handler.addFilter(StartupLogFilter())  # Filtrer pour ne garder que les logs de démarrage
 file_handler.setFormatter(formatter)
 
 # Ajout des handlers au logger
@@ -45,8 +69,6 @@ logger.addHandler(file_handler)
 # Configuration du logger Peewee pour réduire les logs DEBUG SQL
 peewee_logger = logging.getLogger('peewee')
 peewee_logger.setLevel(logging.INFO)  # Masquer les requêtes SQL DEBUG
-
-logger.debug("Initialisation du module cstatic")
 
 
 def _version_from_metadata(dist_name: str) -> str | None:
@@ -194,7 +216,7 @@ class CConstants:
     BASE_URL = BASE_URL
 
     def __init__(self):
-        logger.debug("Initialisation de CConstants")
+        pass
 
 # Exportation explicite des symboles
 __all__ = ['CConstants', 'logger']
