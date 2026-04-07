@@ -163,6 +163,8 @@ class GStatusBar(QStatusBar):
                 "color:green",
                 f"<b>{lse.remaining_days()}</b>" if valid else "Expired",
             )
+        elif valid == CConstants.OK:
+            lse_style, r_lse = "color:#6c757d", "Non requise"
 
         self.info_label.setText(
             f"""

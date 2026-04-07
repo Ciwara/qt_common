@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 
 from ..cstatic import CConstants, logger
 from ..exports import export_license_as_file
-from ..models import License, Organization
+from ..models import License
 from .common import (
     Button,
     ButtonSave,
@@ -48,15 +48,14 @@ class LicenseViewWidget(QDialog, FWidget):
             </div>"""
         )
         vbox = QVBoxLayout()
+        machine_hash = str(make_lcse())
         try:
-            self.lcse = License.get(License.code == str(make_lcse()))
-            rep = self.lcse.can_use()
-        except Exception as e:
-            print(e)
+            self.lcse = License.get(License.code == machine_hash)
+        except License.DoesNotExist:
             self.lcse = License()
-            rep = CConstants.IS_EXPIRED
-            # self.lcse = License.create(
-            #     can_expired=True, code=make_lcse(), owner="Demo")
+        except Exception:
+            logger.exception("Erreur de lecture de la licence en base")
+            self.lcse = License()
         rep = self.lcse.can_use()
 
         if rep == CConstants.IS_NOT_ACTIVATED or rep == CConstants.IS_EXPIRED:
@@ -238,22 +237,12 @@ class LicenseViewWidget(QDialog, FWidget):
         self.setWindowTitle("Activation de licence")
         self.cpt = 0
         
-        # Récupérer le code d'activation de manière sécurisée
+        # Code montré au support : empreinte machine (MD5), alignée sur la validation de licence.
         try:
-            org_code = Organization.get(id=1).slug
-            if not org_code:
-                # Si slug n'existe pas, utiliser le code de machine
-                from .util import make_lcse
-                org_code = make_lcse()
+            org_code = make_lcse()
         except Exception as e:
-            logger.warning(f"Erreur lors de la récupération du code d'organisation: {e}")
-            # Fallback vers le code de machine
-            try:
-                from .util import make_lcse
-                org_code = make_lcse()
-            except Exception as e2:
-                logger.error(f"Erreur lors de la génération du code de machine: {e2}")
-                org_code = "Code non disponible"
+            logger.error("Erreur lors de la génération du code machine: %s", e)
+            org_code = "Code non disponible"
             
         # Champ pour le code de machine avec bouton copier
         code_layout = QHBoxLayout()
@@ -361,7 +350,7 @@ class LicenseViewWidget(QDialog, FWidget):
                 self.cancel()
                 self.accept()
             except Exception as e:
-                print(f"Erreur lors de la révocation: {e}")
+                logger.exception("Erreur lors de la révocation de la licence: %s", e)
                 if self.parent:
                     self.parent.Notify(
                         "❌ Erreur lors de la révocation de la licence", "error"
@@ -470,12 +459,12 @@ class LicenseViewWidget(QDialog, FWidget):
         if is_valide_codition_field(
             self.license_field, "❌ Code de licence invalide", license != m_lcse
         ):
-            # Fonctionnalité de déblocage d'urgence (pour développement)
+            # Déblocage de secours (affiche la clé du jour dans le terminal)
             d = datetime.now()
             key = int((d.year - d.day - d.month) / 2)
             self.cpt += 1
             print(f"Tentative {self.cpt}, clé de déblocage: {key}")
-            
+
             if self.cpt > 2 and license == str(key):
                 self.license_field.setText(m_lcse)
                 if self.parent:

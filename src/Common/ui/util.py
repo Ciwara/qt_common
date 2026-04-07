@@ -10,6 +10,7 @@ import locale
 import os
 import subprocess
 import sys
+from pathlib import Path
 import tempfile
 from datetime import datetime
 from time import mktime, strptime
@@ -20,7 +21,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QMessageBox, QSystemTrayIcon, QTextEdit
 
-from ..cstatic import CConstants, logger
+from ..cstatic import CConstants, license_required, logger
 from .window import FWindow
 
 try:
@@ -415,36 +416,105 @@ def getlog(text):
 
 
 def is_valide_mac():
-    """check de license"""
+    """Retourne (enregistrement License ou None, statut can_use / constante CConstants)."""
     from Common.models import License
 
+    if not license_required():
+        return None, CConstants.OK
+
+    code = str(make_lcse())
     try:
-        lcse = License.get(License.code == str(make_lcse()))
+        lcse = License.get(License.code == code)
         return lcse, lcse.can_use()
-    except Exception as e:
-        logger.debug("/!\\ invalide license.")
+    except License.DoesNotExist:
+        logger.debug("Aucune licence en base pour cette machine (code=%s…)", code[:8])
+        return None, CConstants.IS_EXPIRED
+    except Exception:
+        logger.exception("Erreur lors de la vérification de la licence")
         return None, CConstants.IS_EXPIRED
 
 
+_STABLE_NODE_BASENAME = ".common_device_node"
+
+
+def _stable_machine_node():
+    """Persiste `uuid.getnode()` une fois (Wi‑Fi / VPN peuvent le faire varier)."""
+    base = Path(_license_base_dir())
+    path = base / _STABLE_NODE_BASENAME
+    try:
+        if path.is_file():
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+            if text:
+                return int(text)
+    except (ValueError, OSError):
+        logger.debug("Lecture .common_device_node impossible", exc_info=True)
+    n = int(getnode())
+    try:
+        base.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(n), encoding="utf-8")
+    except OSError as e:
+        logger.warning("Impossible d'enregistrer l'identifiant machine (%s): %s", path, e)
+    return n
+
+
 def clean_mac():
-    return getnode()
+    """Identifiant matériel stabilisé (fichier à côté de la base / LICENCE)."""
+    return _stable_machine_node()
 
 
-def make_lcse(lcse=clean_mac()):
-    print("lcse:", lcse)
-    lcse = hashlib.md5(str(lcse).encode("utf-8")).hexdigest()
-    return lcse
+def make_lcse(lcse=None):
+    """MD5 hex utilisé comme `License.code`. Priorité au fichier LICENCE après activation."""
+    if lcse is not None:
+        return hashlib.md5(str(lcse).encode("utf-8")).hexdigest()
+    try:
+        p = Path(get_lcse_file())
+        if p.is_file():
+            txt = p.read_text(encoding="utf-8", errors="replace").strip()
+            if len(txt) == 32:
+                low = txt.lower()
+                if all(c in "0123456789abcdef" for c in low):
+                    return low
+    except OSError:
+        pass
+    raw = _stable_machine_node()
+    logger.debug("Identifiant machine stabilisé (getnode persisté): %s", raw)
+    return hashlib.md5(str(raw).encode("utf-8")).hexdigest()
 
 
 def get_lcse_of_file():
-    return open("{}".format(get_lcse_file()), "r").read()
+    """Lit le contenu du fichier LICENCE (UTF-8). Lève FileNotFoundError si absent."""
+    path = get_lcse_file()
+    return Path(path).read_text(encoding="utf-8", errors="replace").strip()
+
+
+def _license_base_dir():
+    """Répertoire du fichier LICENCE : stable et en général le même que la base SQLite."""
+    override = (os.environ.get("COMMON_LICENSE_DIR") or "").strip()
+    if override:
+        return override
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    try:
+        from Common.models import dbh
+
+        if dbh is not None:
+            raw = getattr(dbh, "database", None)
+            if raw:
+                p = Path(str(raw))
+                if not p.is_absolute():
+                    p = (Path.cwd() / p).resolve()
+                return str(p.parent)
+    except Exception:
+        logger.debug("Impossible de déduire le répertoire licence depuis la DB", exc_info=True)
+    main = sys.argv[0] if sys.argv else ""
+    if main and os.path.isfile(main):
+        return str(Path(main).resolve().parent)
+    return os.getcwd()
 
 
 def get_lcse_file():
-    """Retourne le chemin du fichier de licence dans le répertoire de travail de l'application"""
-    # Utiliser le répertoire de travail courant (où l'application est lancée)
-    # Le fichier LICENCE doit être dans le répertoire racine de l'application
-    return os.path.join(os.getcwd(), "LICENCE")
+    """Chemin du fichier LICENCE : à côté de la base ou du binaire, pas le CWD arbitraire."""
+    return os.path.join(_license_base_dir(), "LICENCE")
 
 
 def _disk_c(self):

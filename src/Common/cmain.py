@@ -23,7 +23,7 @@ if __name__ == "__main__":
 from PyQt6.QtWidgets import QDialog, QApplication
 
 from . import gettext_windows
-from .cstatic import CConstants, logger
+from .cstatic import CConstants, license_required, logger
 from .models import Organization, Owner, Settings, init_database, dbh
 from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
@@ -40,11 +40,17 @@ def cleanup():
     """Fonction de nettoyage appelée à la fermeture de l'application"""
     try:
         logger.info("💾 Sauvegarde de la base de données avant fermeture...")
-        # Sauvegarder la base de données avant de la fermer
+        # Sauvegarder la base de données avant de la fermer.
+        # IMPORTANT: `atexit` peut être appelé quand QApplication est déjà détruite,
+        # donc aucune UI (QMessageBox/QFileDialog) ne doit être invoquée ici.
         try:
-            from .exports import save_database_on_exit
-            # Note: parent=None car on est dans atexit, pas de fenêtre disponible
-            save_database_on_exit(max_backups=10, parent=None)
+            app = QApplication.instance()
+            if app is not None:
+                from .exports import save_database_on_exit
+                # parent=None: pas de fenêtre, mais QApplication existe encore
+                save_database_on_exit(max_backups=10, parent=None)
+            else:
+                logger.info("QApplication déjà fermée: sauvegarde UI ignorée")
         except Exception as backup_error:
             logger.warning(f"Impossible d'effectuer la sauvegarde automatique: {backup_error}")
         
@@ -56,6 +62,26 @@ def cleanup():
 
 # Enregistrement de la fonction de nettoyage
 atexit.register(cleanup)
+
+
+def ensure_application_database_tables():
+    """
+    Projet hôte : si un module top-level ``database`` expose ``Setup`` (ex. MPayments
+    avec AdminDatabase.create_all_or_pass), crée les tables métier après les migrations
+    Common et avant la fenêtre principale.
+    """
+    try:
+        import database as app_db
+    except ImportError:
+        return
+    setup_cls = getattr(app_db, "Setup", None)
+    if setup_cls is None:
+        return
+    if dbh is not None and dbh.is_closed():
+        dbh.connect()
+    setup_cls().create_all_or_pass()
+    logger.info("Tables métier initialisées (module database.Setup)")
+
 
 def setup_localization():
     logger.info("Configuration de la localisation")
@@ -158,13 +184,25 @@ def handle_initial_conditions(window):
                 logger.warning("Création d'organisation annulée par l'utilisateur")
                 return False
 
-        # Vérification de la licence
-        license_status = is_valide_mac()[1]
-        if license_status != CConstants.OK:
-            logger.debug(f"Vérification de la licence - Statut: {license_status}")
-            if LicenseViewWidget(parent=None).exec() != QDialog.DialogCode.Accepted:
-                logger.warning("Activation de la licence annulée par l'utilisateur")
-                return False
+        # Vérification de la licence (désactivable : COMMON_SKIP_LICENSE ou LICENSE_REQUIRED=False)
+        if license_required():
+            license_status = is_valide_mac()[1]
+            if license_status != CConstants.OK:
+                logger.debug(f"Vérification de la licence - Statut: {license_status}")
+                if LicenseViewWidget(parent=None).exec() != QDialog.DialogCode.Accepted:
+                    logger.warning("Activation de la licence annulée par l'utilisateur")
+                    return False
+                license_status = is_valide_mac()[1]
+                if license_status != CConstants.OK:
+                    logger.warning(
+                        "Licence toujours invalide après la fenêtre d'activation (statut: %s)",
+                        license_status,
+                    )
+                    return False
+        else:
+            logger.info(
+                "Démarrage sans contrôle de licence (COMMON_SKIP_LICENSE ou LICENSE_REQUIRED désactivé)."
+            )
 
         # Vérification de la connexion
         if settings.auth_required:
@@ -233,7 +271,13 @@ def cmain(test=False):
         if not check_and_run_migrations():
             logger.error("Impossible de vérifier ou d'appliquer les migrations")
             return False
-        
+
+        ensure_application_database_tables()
+
+        if dbh is not None and dbh.is_closed():
+            logger.info("Connexion à la base de données (post-migrations)")
+            dbh.connect()
+
         setup_localization()
         
         # Tentative d'initialisation de la fenêtre principale

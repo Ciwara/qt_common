@@ -81,6 +81,9 @@ class TaskThreadUpdater(QThread):
                             Network().get_or_inscribe_app()
                         else:
                             lcse = is_valide_mac()[0]
+                            if lcse is None:
+                                check_interval_without_server = check_interval_with_server
+                                continue
                             resp = Network().submit(
                                 "check_org", {"orga_slug": orga_slug, "lcse": lcse.code}
                             )

@@ -18,12 +18,32 @@ from peewee import SqliteDatabase
 from .cstatic import logger
 from .ui.util import copy_file, date_to_str, datetime_to_str
 
-DB_FILE = "database.db"
 
-# If running in a PyInstaller bundle
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    # Change the db_file to the absolute path
-    DB_FILE = os.path.join(sys._MEIPASS, DB_FILE)
+def _resolve_db_file(name="database.db"):
+    """Chemin SQLite absolu : même dossier que le script lancé (pas le CWD).
+
+    Évite plusieurs `database.db` selon le répertoire de travail — la table
+    `License` et les fichiers LICENCE / `.common_device_node` restent alignés.
+    Surcharge possible : variable d'environnement COMMON_DB_PATH.
+    """
+    forced = (os.environ.get("COMMON_DB_PATH") or "").strip()
+    if forced:
+        return forced
+    # PyInstaller : ne jamais utiliser _MEIPASS (temporaire, souvent lecture seule).
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), name)
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0:
+        try:
+            script = os.path.abspath(argv0)
+            if os.path.isfile(script):
+                return os.path.join(os.path.dirname(script), name)
+        except OSError:
+            pass
+    return os.path.abspath(name)
+
+
+DB_FILE = _resolve_db_file()
 
 logger.info(f"Utilisation de la base de données: {DB_FILE}")
 

@@ -48,6 +48,7 @@ class Network(QObject):
         # logger.debug("update_version_checher")
 
         orga = Organization.get(id=1)
+        vm_lcse, _ = is_valide_mac()
         data = {
             "org_slug": orga.slug,
             "app_info": {
@@ -55,7 +56,7 @@ class Network(QObject):
                 "version": CConstants.APP_VERSION,
             },
             "getSystemInfo": json.loads(getSystemInfo()),
-            "current_lcse": is_valide_mac()[0].code,
+            "current_lcse": vm_lcse.code if vm_lcse else "",
         }
 
         lcse_dic = []

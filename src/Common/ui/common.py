@@ -81,6 +81,30 @@ class FMainWindow(QMainWindow):
     def set_window_title(self, page_name):
         self.setWindowTitle(" > ".join([CConstants.APP_NAME, page_name]))
 
+    def set_theme(self, theme_name):
+        """
+        Change le thème de l'application (délègue à Common.ui.theme).
+        theme_name: "light", "dark" ou "system".
+        """
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        from .theme import apply_theme, get_theme_display_name, THEME_NAMES
+        app = QApplication.instance()
+        if theme_name not in THEME_NAMES:
+            theme_name = "light"
+        if apply_theme(app, theme_name, save_to_settings=True):
+            display_name = get_theme_display_name(theme_name)
+            QMessageBox.information(
+                self,
+                "Thème changé",
+                f"Le thème a été changé en : {display_name}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Erreur",
+                "Impossible de changer le thème. L'application n'est pas disponible.",
+            )
+
     def resizeEvent(self, event):
         """lancé à chaque redimensionnement de la fenêtre"""
         # trouve les dimensions du container
@@ -229,7 +253,7 @@ class FPageTitle(FLabel):
 class FBoxTitle(FLabel):
     def __init__(self, *args, **kwargs):
         super(FBoxTitle, self).__init__(*args, **kwargs)
-        self.setFont(QFont("Times New Roman", 12, QFont.Bold, True))
+        self.setFont(QFont("Times New Roman", 12, QFont.Weight.Bold, True))
         self.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
 
@@ -303,11 +327,11 @@ class QBadgeButton(QPushButton):
         painter.fillPath(path, brush)
 
     def drawBadge(self, painter, x, y, size, text, brush):
-        painter.setFont(QFont(painter.font().family(), 11, QFont.Bold))
+        painter.setFont(QFont(painter.font().family(), 11, QFont.Weight.Bold))
 
         while (size - painter.fontMetrics().horizontalAdvance(text)) < 10:
             pointSize = painter.font().pointSize() - 1
-            weight = QFont.Normal if (pointSize < 8) else QFont.Bold
+            weight = QFont.Weight.Normal if (pointSize < 8) else QFont.Weight.Bold
             painter.setFont(
                 QFont(painter.font().family(), painter.font().pointSize() - 1, weight)
             )
@@ -368,11 +392,11 @@ class QToolBadgeButton(QToolButton):
         painter.fillPath(path, brush)
 
     def drawBadge(self, painter, x, y, size, text, brush):
-        painter.setFont(QFont(painter.font().family(), 11, QFont.Bold))
+        painter.setFont(QFont(painter.font().family(), 11, QFont.Weight.Bold))
 
         while (size - painter.fontMetrics().horizontalAdvance(text)) < 10:
             pointSize = painter.font().pointSize() - 1
-            weight = QFont.Normal if (pointSize < 8) else QFont.Bold
+            weight = QFont.Weight.Normal if (pointSize < 8) else QFont.Weight.Bold
             painter.setFont(
                 QFont(painter.font().family(), painter.font().pointSize() - 1, weight)
             )
@@ -771,7 +795,11 @@ class WigglyWidget(QWidget):
     def __init__(self, test, parent=None):
         super(WigglyWidget, self).__init__(parent)
 
-        self.setBackgroundRole(QPalette.Midlight)
+        # PyQt6: les rôles sont dans QPalette.ColorRole (pas QPalette.Midlight)
+        try:
+            self.setBackgroundRole(QPalette.ColorRole.Midlight)
+        except Exception:
+            pass
         # print(test)
         newFont = self.font()
         newFont.setPointSize(newFont.pointSize() + 20)

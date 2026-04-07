@@ -168,6 +168,23 @@ ExportFolders = []
 ExportFiles = []
 BASE_URL = "https://file-repo.ml"
 
+# Contrôle de licence au démarrage. False = pas de fenêtre d'activation (install / démo).
+# Peut aussi être désactivé sans recompiler : variable d'environnement COMMON_SKIP_LICENSE=1
+# (valeurs acceptées : 1, true, yes, on).
+LICENSE_REQUIRED = True
+
+# True = sauvegarde auto à la fermeture uniquement sur clé USB (dialogues).
+# False = copie silencieuse dans le dossier backups/ à côté de database.db (recommandé, exe / atexit).
+BACKUP_TO_USB = False
+
+
+def license_required():
+    """Retourne False si la licence ne doit pas bloquer l'application."""
+    v = (os.environ.get("COMMON_SKIP_LICENSE") or "").strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return False
+    return LICENSE_REQUIRED
+
 
 class CConstants:
     """Classe contenant les constantes de l'application"""
@@ -214,9 +231,11 @@ class CConstants:
     ExportFolders = ExportFolders
     ExportFiles = ExportFiles
     BASE_URL = BASE_URL
+    LICENSE_REQUIRED = LICENSE_REQUIRED
+    BACKUP_TO_USB = BACKUP_TO_USB
 
     def __init__(self):
         pass
 
 # Exportation explicite des symboles
-__all__ = ['CConstants', 'logger']
+__all__ = ['CConstants', 'logger', 'license_required', 'LICENSE_REQUIRED']

@@ -164,10 +164,17 @@ class FMenuBar(QMenuBar, FWidget):
         preferences_action.triggered.connect(self.open_preferences)
         preference.addAction(preferences_action)
         
-        # Action Thème
-        theme_action = QAction("🎨 Thème", self)
-        theme_action.triggered.connect(self.change_theme)
-        preference.addAction(theme_action)
+        # Sous-menu Thème (clair / sombre / système)
+        from .theme import THEME_LIGHT, THEME_DARK, THEME_SYSTEM, get_theme_display_name
+        theme_menu = preference.addMenu("🎨 &Thème")
+        for theme_id, theme_label in [
+            (THEME_LIGHT, get_theme_display_name(THEME_LIGHT)),
+            (THEME_DARK, get_theme_display_name(THEME_DARK)),
+            (THEME_SYSTEM, get_theme_display_name(THEME_SYSTEM)),
+        ]:
+            action = QAction(theme_label, self)
+            action.triggered.connect(lambda checked, t=theme_id: self.set_theme(t))
+            theme_menu.addAction(action)
         
         # Séparateur avant le menu administration
         preference.addSeparator()
@@ -568,8 +575,35 @@ Fichier à relancer: {main_file}"""
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du menu administration: {e}")
 
+    def set_theme(self, theme_name):
+        """
+        Change le thème de l'application (délègue au parent ou applique via Common.ui.theme).
+        theme_name: "light", "dark" ou "system".
+        """
+        if self.parent and hasattr(self.parent, "set_theme"):
+            self.parent.set_theme(theme_name)
+            return
+        from .theme import apply_theme, get_theme_display_name, THEME_NAMES
+        from PyQt6.QtWidgets import QMessageBox
+        app = QApplication.instance()
+        if theme_name not in THEME_NAMES:
+            theme_name = "light"
+        if apply_theme(app, theme_name, save_to_settings=True):
+            display_name = get_theme_display_name(theme_name)
+            QMessageBox.information(
+                self.parent or self,
+                "Thème changé",
+                f"Le thème a été changé en : {display_name}",
+            )
+        else:
+            QMessageBox.warning(
+                self.parent or self,
+                "Erreur",
+                "Impossible de changer le thème. L'application n'est pas disponible.",
+            )
+
     def change_theme(self):
-        """Ouvre le dialogue de sélection de thème"""
+        """Ouvre le dialogue de sélection de thème (si ThemeSelectorDialog existe)"""
         try:
             # Essayer d'importer depuis le projet spécifique
             from ui.theme_selector import ThemeSelectorDialog
@@ -582,7 +616,7 @@ Fichier à relancer: {main_file}"""
                 QMessageBox.information(
                     self.parent,
                     "Thème",
-                    "Le sélecteur de thème n'est pas disponible dans cette application."
+                    "Le sélecteur de thème n'est pas disponible. Utilisez Paramètres > Thème > Clair/Sombre/Système.",
                 )
                 return
         

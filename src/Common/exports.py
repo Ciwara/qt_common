@@ -672,94 +672,127 @@ def select_usb_drive(parent=None):
         return None
 
 
-def save_database_on_exit(max_backups=10, parent=None):
-    """
-    Sauvegarde automatique de la base de données à la fermeture de l'application.
-    Nécessite une clé USB branchée.
-    
-    Args:
-        max_backups (int): Nombre maximum de sauvegardes à conserver (par défaut: 10)
-        parent: Widget parent pour les boîtes de dialogue (optionnel)
-    
-    Returns:
-        bool: True si la sauvegarde a réussi, False sinon
-    """
-    from .cstatic import logger
-    
+def _prune_backup_dir(backup_dir, max_backups):
     try:
-        # Sélectionner une clé USB (détection automatique + sélection si nécessaire)
+        backup_files = [
+            os.path.join(backup_dir, f)
+            for f in os.listdir(backup_dir)
+            if f.startswith("backup_") and f.endswith(".db")
+        ]
+        backup_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        if len(backup_files) > max_backups:
+            for old_backup in backup_files[max_backups:]:
+                try:
+                    os.remove(old_backup)
+                    logger.debug(
+                        "Ancienne sauvegarde supprimée: %s",
+                        os.path.basename(old_backup),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Impossible de supprimer l'ancienne sauvegarde %s: %s",
+                        old_backup,
+                        e,
+                    )
+    except Exception as e:
+        logger.warning("Erreur lors du nettoyage des anciennes sauvegardes: %s", e)
+
+
+def _save_database_local(max_backups=10):
+    """Sauvegarde silencieuse vers le dossier backups/ à côté de database.db (pas de dialogue)."""
+    db_file_abs = os.path.abspath(DB_FILE)
+    if not os.path.exists(db_file_abs):
+        logger.debug("Sauvegarde locale: aucune base à copier (%s)", db_file_abs)
+        return True
+    backup_dir = os.path.join(os.path.dirname(db_file_abs), "backups")
+    try:
+        os.makedirs(backup_dir, exist_ok=True)
+    except OSError as e:
+        logger.warning("Sauvegarde locale: impossible de créer %s : %s", backup_dir, e)
+        return False
+    backup_filename = f"backup_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm%Ss')}.db"
+    backup_path = os.path.join(backup_dir, backup_filename)
+    try:
+        shutil.copy2(db_file_abs, backup_path)
+        logger.info("Sauvegarde locale: %s", backup_path)
+    except (OSError, IOError) as e:
+        logger.warning("Sauvegarde locale échouée: %s", e)
+        return False
+    _prune_backup_dir(backup_dir, max_backups)
+    return True
+
+
+def _save_database_on_usb(max_backups=10, parent=None):
+    """Ancien comportement : sauvegarde sur clé USB (QMessageBox / QFileDialog)."""
+    try:
         usb_drive = select_usb_drive(parent)
         if not usb_drive:
             logger.warning("Aucune clé USB sélectionnée, sauvegarde annulée")
             return False
-        
-        # Obtenir le chemin absolu du fichier de base de données
+
         db_file_abs = os.path.abspath(DB_FILE)
-        
-        # Vérifier que le fichier de base de données existe
+
         if not os.path.exists(db_file_abs):
-            logger.warning(f"Le fichier de base de données n'existe pas: {db_file_abs}")
+            logger.warning("Le fichier de base de données n'existe pas: %s", db_file_abs)
             return False
-        
-        # Créer le répertoire de sauvegarde sur la clé USB
+
         backup_dir = os.path.join(usb_drive, "backups")
-        
-        # Créer le répertoire s'il n'existe pas
+
         try:
             os.makedirs(backup_dir, exist_ok=True)
         except OSError as e:
-            logger.error(f"Impossible de créer le répertoire de sauvegarde sur la clé USB: {e}")
+            logger.error("Impossible de créer le répertoire de sauvegarde sur la clé USB: %s", e)
             raise_error(
                 "Erreur de sauvegarde",
                 f"Impossible de créer le répertoire de sauvegarde sur la clé USB:\n{usb_drive}\n\n"
-                f"Vérifiez que la clé USB n'est pas protégée en écriture."
+                f"Vérifiez que la clé USB n'est pas protégée en écriture.",
             )
             return False
-        
-        # Générer le nom du fichier de sauvegarde avec la date et l'heure
+
         backup_filename = f"backup_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm%Ss')}.db"
         backup_path = os.path.join(backup_dir, backup_filename)
-        
-        # Copier la base de données sur la clé USB
+
         try:
             shutil.copy2(db_file_abs, backup_path)
-            logger.info(f"✅ Sauvegarde de la base de données créée sur la clé USB: {backup_path}")
+            logger.info(
+                "Sauvegarde de la base de données sur clé USB: %s", backup_path
+            )
         except (IOError, OSError) as e:
-            logger.error(f"Erreur lors de la copie vers la clé USB: {e}")
+            logger.error("Erreur lors de la copie vers la clé USB: %s", e)
             raise_error(
                 "Erreur de sauvegarde",
                 f"Impossible de sauvegarder sur la clé USB:\n{usb_drive}\n\n"
                 f"Vérifiez que:\n"
                 f"• La clé USB n'est pas protégée en écriture\n"
                 f"• Il y a suffisamment d'espace disponible\n"
-                f"• La clé USB n'a pas été retirée"
+                f"• La clé USB n'a pas été retirée",
             )
             return False
-        
-        # Nettoyer les anciennes sauvegardes (garder seulement les max_backups plus récentes)
-        try:
-            backup_files = [
-                os.path.join(backup_dir, f)
-                for f in os.listdir(backup_dir)
-                if f.startswith("backup_") and f.endswith(".db")
-            ]
-            
-            # Trier par date de modification (plus récent en premier)
-            backup_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-            
-            # Supprimer les sauvegardes en trop
-            if len(backup_files) > max_backups:
-                for old_backup in backup_files[max_backups:]:
-                    try:
-                        os.remove(old_backup)
-                        logger.debug(f"Ancienne sauvegarde supprimée: {os.path.basename(old_backup)}")
-                    except Exception as e:
-                        logger.warning(f"Impossible de supprimer l'ancienne sauvegarde {old_backup}: {e}")
-        except Exception as e:
-            logger.warning(f"Erreur lors du nettoyage des anciennes sauvegardes: {e}")
-        
+
+        _prune_backup_dir(backup_dir, max_backups)
+
         return True
-        
+
     except Exception as e:
-        logger.error(f"❌ Erreur lors de la sauvegarde automatique de la base de données: {e}")
+        logger.error("Erreur lors de la sauvegarde sur clé USB: %s", e)
+        return False
+
+
+def save_database_on_exit(max_backups=10, parent=None):
+    """
+    Sauvegarde automatique à la fermeture.
+
+    Par défaut (BACKUP_TO_USB=False) : copie silencieuse dans ``backups/`` à côté
+    de ``database.db`` — adapté aux exes et à ``atexit`` sans dialogue.
+
+    Si BACKUP_TO_USB=True : comportement historique (choix / détection de clé USB).
+    """
+    try:
+        from . import cstatic
+
+        if cstatic.BACKUP_TO_USB:
+            return _save_database_on_usb(max_backups, parent)
+        return _save_database_local(max_backups)
+    except Exception as e:
+        logger.error("Erreur lors de la sauvegarde automatique de la base: %s", e)
         return False
