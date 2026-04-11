@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import base64
 import os
 import shutil
 import tempfile
@@ -27,6 +26,7 @@ from reportlab.platypus.tables import Table, TableStyle
 
 from .cstatic import CConstants, logger
 from .models import Organization
+from .org_logo import decode_org_logo_bytes
 from .ui.util import openFile
 
 
@@ -37,39 +37,9 @@ def _rp(text) -> str:
     return escape(str(text), quote=False).replace("\n", "<br/>")
 
 
-def _decode_org_logo_bytes(logo_field) -> bytes | None:
-    """logo_orga : chemin fichier, data URL base64 ou chaîne base64 (comme l’écran login)."""
-    if not logo_field:
-        return None
-    if isinstance(logo_field, (bytes, bytearray)):
-        return bytes(logo_field)
-    s = str(logo_field).strip()
-    if not s:
-        return None
-    # Data URL en premier : évite Path(...) sur une chaîne énorme → Errno 63 (nom trop long).
-    if s.startswith("data:") and "," in s:
-        b64_part = "".join(s.split(",", 1)[1].split())
-        try:
-            return base64.b64decode(b64_part, validate=False)
-        except Exception:
-            return None
-    try:
-        if len(s) <= 8192:
-            p = Path(s)
-            if p.is_file():
-                return p.read_bytes()
-    except OSError:
-        pass
-    compact = "".join(s.split())
-    try:
-        return base64.b64decode(compact, validate=False)
-    except Exception:
-        return None
-
-
 def _build_org_logo_flowable(logo_field, max_width: float) -> RLImage | None:
     """Image ReportLab redimensionnée (ratio conservé si Pillow disponible)."""
-    raw = _decode_org_logo_bytes(logo_field)
+    raw = decode_org_logo_bytes(logo_field)
     if not raw:
         return None
     try:
