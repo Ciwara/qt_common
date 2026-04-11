@@ -162,6 +162,11 @@ LSE = True
 ORG = False
 SERV = False
 list_models = []
+# Tables proposées dans « Suppression des enregistrements » (libellé, classe Peewee).
+# Les applis peuvent faire CLEANABLE_MODELS.extend([...]) pour remplir la liste partagée.
+CLEANABLE_MODELS = []
+# Prérequis : avant de vider une table, vider d’abord ces modèles (clé → liste de classes).
+CLEAN_MODEL_PREREQUISITES = {}
 APP_LOGO = os.path.join(img_media, "logo.png")
 APP_LOGO_ICO = os.path.join(img_media, "logo.ico")
 ExportFolders = []
@@ -226,6 +231,8 @@ class CConstants:
     ORG = ORG
     SERV = SERV
     list_models = list_models
+    CLEANABLE_MODELS = CLEANABLE_MODELS
+    CLEAN_MODEL_PREREQUISITES = CLEAN_MODEL_PREREQUISITES
     APP_LOGO = APP_LOGO
     APP_LOGO_ICO = APP_LOGO_ICO
     ExportFolders = ExportFolders
