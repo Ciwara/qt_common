@@ -101,10 +101,11 @@ def export_dynamic_data(dict_data):
     style_def = workbook.add_format({})
     rowx = 1
     end_colx = len(headers) - 1
+    # APP_LOGO pointe déjà vers img_media/logo.* (cstatic) — ne pas refaire join(img_media, APP_LOGO).
     if CConstants.APP_LOGO:
         worksheet.insert_image(
             "A1:B2",
-            os.path.join(CConstants.img_media, CConstants.APP_LOGO),
+            CConstants.APP_LOGO,
             {"x_offset": 1.5, "y_offset": 0.5},
         )
         rowx += 6
@@ -172,11 +173,22 @@ def export_dynamic_data(dict_data):
             )
             rowx += 1
         rowx += 1
+    # others : le dict peut contenir d'anciennes refs Excel (A10:C10) — elles chevauchent
+    # add_table. On écrit chaque texte sous le tableau sur la ligne courante.
     if others:
-        for pos, pos2, val in others:
+        rowx += 1
+        for _pos, _pos2, val in others:
+            if val is None or str(val).strip() == "":
+                continue
             worksheet.merge_range(
-                "{}:{}".format(pos, pos2), val, workbook.add_format(style_label)
+                rowx,
+                0,
+                rowx,
+                end_colx,
+                str(val),
+                workbook.add_format(style_label),
             )
+            rowx += 1
     try:
         workbook.close()
         # workbook.save(file_name)

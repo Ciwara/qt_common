@@ -134,14 +134,24 @@ def uopen_prefix(platform=sys.platform):
 
 
 def openFile(file):
-    # if sys.platform == "linux2":
-    #     subprocess.call(["xdg-open", file])
-    # else:
-    #     os.startfile(file)
-    import subprocess, sys
-
-    opener = "open" if sys.platform == "darwin" else "xdg-open"
-    subprocess.call([opener, file])
+    """
+    Ouvre un fichier avec l’application par défaut du système.
+    Windows : ``os.startfile`` ; macOS : ``open`` ; Linux/BSD : ``xdg-open``.
+    """
+    path = os.path.abspath(os.path.normpath(str(file)))
+    if not os.path.isfile(path):
+        logger.warning("openFile: fichier introuvable: %s", path)
+        return 1
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)  # noqa: S606
+            return 0
+        if sys.platform == "darwin":
+            return subprocess.run(["open", path], check=False).returncode
+        return subprocess.run(["xdg-open", path], check=False).returncode
+    except OSError as e:
+        logger.warning("openFile: impossible d'ouvrir %s: %s", path, e)
+        return 1
 
 
 def uopen_file(filename):

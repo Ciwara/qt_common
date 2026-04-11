@@ -538,7 +538,7 @@ class LogViewerWidget(QDialog, FWidget):
         
         level_filter = self.level_filter.currentText()
         search_text = self.search_field.text().lower()
-        filter_date = self.date_filter.date().toPython()
+        filter_date = self.date_filter.date().toPyDate()
         
         # Obtenir la position de scroll actuelle
         scrollbar = self.log_text.verticalScrollBar()
