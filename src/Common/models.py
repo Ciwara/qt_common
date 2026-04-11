@@ -365,38 +365,33 @@ class Owner(BaseModel):
         return token
 
     def verify_reset_token(self, token):
-        """Vérifie si le token de réinitialisation est valide"""
-        if not hasattr(self, 'reset_token') or not hasattr(self, 'reset_token_expiry'):
-            return False
-            
+        """
+        Vérifie si le token correspond et n'est pas expiré.
+        Ne consomme pas le token : l'invalidation se fait dans reset_password
+        après validation du nouveau mot de passe (évite de perdre le code si
+        le mot de passe ne respecte pas les règles).
+        """
         if not self.reset_token or not self.reset_token_expiry:
             return False
-            
-        # Vérifier si le token correspond et n'est pas expiré
-        is_valid = (
-            self.reset_token == token and 
-            datetime.now() < self.reset_token_expiry
+        if not token or not str(token).strip():
+            return False
+        return (
+            self.reset_token == str(token).strip()
+            and datetime.now() < self.reset_token_expiry
         )
-        
-        # Si le token est valide, le supprimer
-        if is_valid:
-            self.reset_token = None
-            self.reset_token_expiry = None
-            self.save()
-            
-        return is_valid
 
     def reset_password(self, new_password):
-        """Réinitialise le mot de passe de l'utilisateur"""
-        # Valider le nouveau mot de passe
+        """Réinitialise le mot de passe après validation (règles + token déjà vérifié)."""
         is_valid, message = self.validate_password(new_password)
         if not is_valid:
             return False, message
-            
-        # Hacher et sauvegarder le nouveau mot de passe
+
         self.password = self.crypt_password(new_password)
-        self.save()
-        
+        self.reset_token = None
+        self.reset_token_expiry = None
+        # Déblocage connexion + une seule sauvegarde
+        self.reset_login_attempts()
+
         return True, "Mot de passe réinitialisé avec succès"
 
 
