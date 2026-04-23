@@ -202,8 +202,12 @@ def formatted_number(number, sep=".", aftergam=None):
 
     from Common.models import Settings
 
-    if not aftergam:
+    if aftergam is None:
         aftergam = int(Settings.select().get().after_cam)
+    else:
+        aftergam = int(aftergam)
+    if aftergam < 0:
+        aftergam = 0
 
     # Set the locale to the desired locale
     # locale.setlocale(locale.LC_ALL, "fra") # Uncomment if you need to set a specific locale
@@ -225,6 +229,58 @@ def formatted_number(number, sep=".", aftergam=None):
     except Exception as e:
         logger.debug("formatted_number : %s", e)
         return str(number)
+
+
+def format_number_table_no_round(number):
+    """Affichage tableau : pas d’arrondi imposé, uniquement suppression des zéros de fin.
+
+    Utilise la représentation décimale de la valeur (Decimal(str(...)) pour les float)
+    puis formate avec la locale (groupement), sans tronquer à N décimales fixes.
+    """
+    import math
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        if isinstance(number, int):
+            return formatted_number(number)
+        if isinstance(number, float):
+            if math.isnan(number) or math.isinf(number):
+                return str(number)
+            d = Decimal(str(number))
+        elif isinstance(number, Decimal):
+            d = number
+        else:
+            d = Decimal(str(number))
+    except (InvalidOperation, ValueError, TypeError):
+        return str(number)
+
+    s = format(d, "f")
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+
+    if "." in s:
+        int_part, frac_part = s.split(".", 1)
+        frac_part = frac_part.rstrip("0")
+        ndigits = len(frac_part) if frac_part else 0
+    else:
+        int_part = s
+        ndigits = 0
+
+    int_val = int(int_part)
+    if neg:
+        int_val = -int_val
+
+    try:
+        if ndigits == 0:
+            return formatted_number(int_val)
+        conv = locale.localeconv()
+        dec_sym = conv.get("decimal_point") or "."
+        left = locale.format_string("%d", int_val, grouping=True)
+        return f"{left}{dec_sym}{frac_part}"
+    except Exception as e:
+        logger.debug("format_number_table_no_round : %s", e)
+        return str(d)
 
 
 class SystemTrayIcon(QSystemTrayIcon):

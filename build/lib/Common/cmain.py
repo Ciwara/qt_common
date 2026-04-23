@@ -248,7 +248,8 @@ def cmain(test=False):
             logger.error("Aucune fenêtre n'a pu être initialisée")
             return False
 
-        if CConstants.DEBUG or test:
+        # Court-circuit réservé au mode test ; DEBUG ne doit pas sauter la connexion.
+        if test:
             window.showMaximized()
             return app.exec()
 

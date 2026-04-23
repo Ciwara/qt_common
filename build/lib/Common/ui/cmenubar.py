@@ -4,7 +4,7 @@
 # maintainer: Fad
 
 from PyQt6.QtGui import QIcon, QPixmap, QAction
-from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox, QDialog
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
@@ -252,7 +252,19 @@ class FMenuBar(QMenuBar, FWidget):
     def logout(self):
         from .login import LoginWidget
 
-        LoginWidget(hibernate=True).exec()
+        dlg = LoginWidget(hibernate=True)
+        dlg.exec()
+
+        # Si l'utilisateur s'est (re)connecté, rafraîchir l'affichage
+        try:
+            if dlg.result() == QDialog.DialogCode.Accepted:
+                self.update_user_menu()
+        except Exception:
+            # En dernier recours, tenter un rafraîchissement simple
+            try:
+                self.update_user_menu()
+            except Exception:
+                pass
 
     # Export the database.
     def goto_export_db(self):

@@ -11,3 +11,4 @@ cmedia/img_media/product/
 .env/
 logs/app.log
 database.db*
+logs/app.log.1

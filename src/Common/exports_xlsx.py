@@ -40,6 +40,15 @@ ORG_LOGO_XLSX_WIDTH_PX = 200
 ORG_LOGO_XLSX_HEIGHT_PX = 72
 
 
+def _sanitize_excel_sheet_name(name: str) -> str:
+    """Excel / xlsxwriter : pas de [] : * ? / \\, longueur <= 31, pas d’apostrophe en tête/fin."""
+    s = str(name or "Feuil1")[:31]
+    for c in r"[]:*?/\\":
+        s = s.replace(c, "_")
+    s = s.strip().strip("'")
+    return s or "Feuil1"
+
+
 def _org_logo_xlsx_image_options(image_path: str) -> dict:
     """Échelle xlsxwriter pour afficher le logo dans une zone de taille fixe (ratio conservé)."""
     opts = {"x_offset": 2, "y_offset": 2}
@@ -66,7 +75,7 @@ def _write_xlsx_to_path(dict_data: dict, output_path: str) -> None:
     organization = Organization.get(id=1)
 
     headers = dict_data.get("headers") or []
-    sheet_name = str(dict_data.get("sheet") or "Feuil1")
+    sheet_name = _sanitize_excel_sheet_name(str(dict_data.get("sheet") or "Feuil1"))
     data = dict_data.get("data") or []
     widths = dict_data.get("widths")
     date_ = str(dict_data.get("date"))

@@ -279,7 +279,25 @@ def cmain(test=False):
             dbh.connect()
 
         setup_localization()
-        
+
+        # Appliquer le thème déjà enregistré (sinon il n'est jamais relu au prochain lancement)
+        try:
+            from .ui.theme import THEME_LIGHT, THEME_NAMES, apply_theme
+
+            if dbh is not None and dbh.is_closed():
+                dbh.connect()
+            _st = Settings.init_settings()
+            _t = getattr(_st, "theme", None) or THEME_LIGHT
+            if isinstance(_t, str):
+                _t = _t.strip().lower()
+            if _t in ("", "default"):
+                _t = THEME_LIGHT
+            elif _t not in THEME_NAMES:
+                _t = THEME_LIGHT
+            apply_theme(app, _t, save_to_settings=False)
+        except Exception as e:
+            logger.warning("Thème au démarrage ignoré: %s", e)
+
         # Tentative d'initialisation de la fenêtre principale
         window = None
 
@@ -292,7 +310,10 @@ def cmain(test=False):
             logger.error("Aucune fenêtre n'a pu être initialisée")
             return False
 
-        if CConstants.DEBUG or test:
+        # Ne court-circuiter la connexion / licence qu'en mode `test` unitaire.
+        # Si `CConstants.DEBUG` est True, l'ancien comportement sautait
+        # `handle_initial_conditions` : aucun Owner.is_identified (ex. factures).
+        if test:
             window.showMaximized()
             return app.exec()
 

@@ -4,7 +4,7 @@
 # maintainer: Fad
 
 from PyQt6.QtGui import QIcon, QPixmap, QAction
-from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox, QDialog
 
 from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
@@ -16,6 +16,25 @@ from ..cstatic import CConstants, logger
 
 
 class FMenuBar(QMenuBar, FWidget):
+    @staticmethod
+    def _preference_menu_from_bar(menubar):
+        """Trouve le menu Paramètres quel que soit le libellé (&, macOS, etc.)."""
+        for action in menubar.actions():
+            menu = action.menu()
+            if not menu:
+                continue
+            label = action.text().replace("&", "").strip().lower()
+            if label in (
+                "paramètres",
+                "parametres",
+                "préférences",
+                "preferences",
+                "préférence",
+                "preference",
+            ):
+                return menu
+        return None
+
     def __init__(self, parent=None, admin=False, *args, **kwargs):
         QMenuBar.__init__(self, parent=parent, *args, **kwargs)
 
@@ -139,7 +158,7 @@ class FMenuBar(QMenuBar, FWidget):
             logger.debug(f"Recherche des propriétaires connectés: {ow.exists()}")
             
             if ow.exists():
-                owner = ow.get()
+                owner = ow.order_by(Owner.last_login.desc()).first()
                 logger.debug(f"Propriétaire trouvé - groupe: {owner.group}, Admin requis: {Owner.ADMIN}")
                 
                 if owner.group in [Owner.ADMIN, Owner.SUPERUSER] and "del_all" not in exclude_mn:
@@ -158,7 +177,9 @@ class FMenuBar(QMenuBar, FWidget):
 
         # Menu Paramètres/Préférences (fusionné)
         preference = self.addMenu("&Paramètres")
-        
+        self.utilisateurs_menu = self.addMenu("&Utilisateurs")
+        self.utilisateurs_menu.menuAction().setVisible(False)
+
         # Action Préférences
         preferences_action = QAction("⚙️ Préférences", self)
         preferences_action.triggered.connect(self.open_preferences)
@@ -197,6 +218,17 @@ class FMenuBar(QMenuBar, FWidget):
                     admin_.setShortcut("Ctrl+G")
                     admin_.triggered.connect(self.goto_admin)
                     preference.addAction(admin_)
+                    self.admin_menu_action = admin_
+                    users_act = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}user_active.png")),
+                        "Gérer les comptes utilisateurs",
+                        self,
+                    )
+                    users_act.setShortcut("Ctrl+U")
+                    users_act.triggered.connect(self.goto_admin_users)
+                    self.utilisateurs_menu.clear()
+                    self.utilisateurs_menu.addAction(users_act)
+                    self.utilisateurs_menu.menuAction().setVisible(True)
                     logger.debug("Menu d'administration ajouté avec succès pour l'administrateur")
                 else:
                     logger.debug(f"Accès administrateur refusé - groupe: {connected_owner.group}, requis: {Owner.ADMIN} ou {Owner.SUPERUSER}")
@@ -216,7 +248,18 @@ class FMenuBar(QMenuBar, FWidget):
                     admin_.setShortcut("Ctrl+G")
                     admin_.triggered.connect(self.goto_admin)
                     preference.addAction(admin_)
-            except:
+                    self.admin_menu_action = admin_
+                    users_act = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}user_active.png")),
+                        "Gérer les comptes utilisateurs",
+                        self,
+                    )
+                    users_act.setShortcut("Ctrl+U")
+                    users_act.triggered.connect(self.goto_admin_users)
+                    self.utilisateurs_menu.clear()
+                    self.utilisateurs_menu.addAction(users_act)
+                    self.utilisateurs_menu.menuAction().setVisible(True)
+            except Exception:
                 pass
         # logout
         lock = QAction(QIcon(f"{CConstants.img_cmedia}login.png"), "Verrouiller", self)
@@ -259,7 +302,19 @@ class FMenuBar(QMenuBar, FWidget):
     def logout(self):
         from .login import LoginWidget
 
-        LoginWidget(hibernate=True).exec()
+        dlg = LoginWidget(hibernate=True)
+        dlg.exec()
+
+        # Si l'utilisateur s'est (re)connecté, rafraîchir l'affichage
+        try:
+            if dlg.result() == QDialog.DialogCode.Accepted:
+                self.update_user_menu()
+        except Exception:
+            # En dernier recours, tenter un rafraîchissement simple
+            try:
+                self.update_user_menu()
+            except Exception:
+                pass
 
     # Export the database.
     def goto_export_db(self):
@@ -279,6 +334,11 @@ class FMenuBar(QMenuBar, FWidget):
         from .admin import AdminViewWidget
 
         self.change_main_context(AdminViewWidget)
+
+    def goto_admin_users(self):
+        from .admin import AdminViewWidget
+
+        self.change_main_context(AdminViewWidget, initial_tab=AdminViewWidget.TAB_USERS)
 
     # G. license
     def goto_license(self):
@@ -533,27 +593,27 @@ Fichier à relancer: {main_file}"""
     def update_admin_menu(self):
         """Met à jour le menu administration selon les droits de l'utilisateur connecté"""
         try:
-            # Trouver le menu Paramètres
-            preference_menu = None
-            for action in self.actions():
-                if action.menu() and (action.text() == "&Paramètres" or action.text() == "&Préference"):
-                    preference_menu = action.menu()
-                    break
-            
+            preference_menu = self._preference_menu_from_bar(self)
+
             if not preference_menu:
                 logger.warning("Menu Paramètres non trouvé")
                 return
-            
+
             # Supprimer l'ancien menu administration s'il existe
-            if hasattr(self, 'admin_menu_action'):
+            if hasattr(self, "admin_menu_action") and self.admin_menu_action is not None:
                 try:
                     preference_menu.removeAction(self.admin_menu_action)
-                except:
+                except Exception:
                     pass
-            
+                self.admin_menu_action = None
+
+            if hasattr(self, "utilisateurs_menu"):
+                self.utilisateurs_menu.clear()
+                self.utilisateurs_menu.menuAction().setVisible(False)
+
             # Récupérer l'utilisateur connecté
             connected_owner = Owner.select().where(Owner.is_identified == True).order_by(Owner.last_login.desc()).first()
-            
+
             if connected_owner:
                 # Vérifier si l'utilisateur est administrateur (ADMIN ou SUPERUSER)
                 if connected_owner.group in [Owner.ADMIN, Owner.SUPERUSER]:
@@ -567,6 +627,15 @@ Fichier à relancer: {main_file}"""
                     admin_.triggered.connect(self.goto_admin)
                     preference_menu.addAction(admin_)
                     self.admin_menu_action = admin_
+                    users_act = QAction(
+                        QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}user_active.png")),
+                        "Gérer les comptes utilisateurs",
+                        self,
+                    )
+                    users_act.setShortcut("Ctrl+U")
+                    users_act.triggered.connect(self.goto_admin_users)
+                    self.utilisateurs_menu.addAction(users_act)
+                    self.utilisateurs_menu.menuAction().setVisible(True)
                     logger.debug(f"Menu d'administration ajouté pour l'utilisateur {connected_owner.username} (groupe: {connected_owner.group})")
                 else:
                     logger.debug(f"Accès administrateur refusé - groupe: {connected_owner.group}, requis: {Owner.ADMIN} ou {Owner.SUPERUSER}")

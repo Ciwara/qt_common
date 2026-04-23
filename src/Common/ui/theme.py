@@ -159,11 +159,16 @@ def apply_theme(app, theme_name, save_to_settings=True):
         theme_name: "light", "dark" ou "system".
         save_to_settings: Si True, enregistre le thème dans Settings (id=1).
     """
+    from PyQt6.QtWidgets import QApplication
+
+    from ..cstatic import logger
+
     if app is None:
         return False
-    if theme_name not in THEME_NAMES:
+    if not theme_name or str(theme_name).strip().lower() in ("default",):
         theme_name = THEME_LIGHT
-    from PyQt6.QtWidgets import QApplication
+    elif theme_name not in THEME_NAMES:
+        theme_name = THEME_LIGHT
 
     stylesheet = get_stylesheet(theme_name)
     app.setStyleSheet(stylesheet)
@@ -179,13 +184,18 @@ def apply_theme(app, theme_name, save_to_settings=True):
             pass
     if save_to_settings:
         try:
-            from ..models import Settings
-            sttg = Settings.get_by_id(1)
-            if hasattr(sttg, "theme"):
-                sttg.theme = theme_name
-                sttg.save()
-        except Exception:
-            pass
+            from ..models import Settings, dbh
+
+            if dbh is not None and dbh.is_closed():
+                dbh.connect()
+            sttg = Settings.get_or_none(Settings.id == 1)
+            if sttg is None:
+                sttg = Settings.init_settings()
+            sttg.theme = theme_name
+            sttg.save()
+            logger.info("Thème enregistré dans Settings: %s", theme_name)
+        except Exception as exc:
+            logger.warning("Enregistrement du thème impossible: %s", exc)
     return True
 
 

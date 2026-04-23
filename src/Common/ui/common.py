@@ -18,7 +18,6 @@ from PyQt6.QtGui import (
     QPainterPath,
     QPalette,
     QPen,
-    QPixmap,
     QRadialGradient,
     QFontMetrics,
 )
@@ -572,43 +571,27 @@ class BttSmall(Button):
 
 
 class BttExport(Button):
-    def __init__(self, img, parent=None):
-        super(BttExport, self).__init__()
+    """Bouton export PDF / Excel : icône Qt (plus de dessin manuel du pixmap)."""
 
-        self.pixmap = QPixmap(
-            "{img_media}{img}".format(
-                img_media=CConstants.img_cmedia, img="{}.png".format(img)
-            )
-        )
-        self.setFixedHeight(85)
-        self.setFixedWidth(85)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.drawPixmap(event.rect(), self.pixmap)
-
-    def sizeHint(self):
-        return self.pixmap.size()
+    def __init__(self, icon_basename: str, parent=None):
+        super().__init__()
+        self.setDescription("")
+        path = "{}{}.png".format(CConstants.img_cmedia, icon_basename)
+        self.setIcon(QIcon(path))
+        self.setIconSize(QSize(72, 72))
+        self.setFixedSize(85, 85)
 
 
 class BttExportXLSX(BttExport):
     def __init__(self, img):
-        super(BttExportXLSX, self).__init__("xlsx")
-        self.pixmap = QPixmap(
-            "{img_media}{img}".format(
-                img_media=CConstants.img_cmedia, img="{}.png".format(img)
-            )
-        )
+        super().__init__("xlsx")
+        self.setToolTip("Exporter en Excel")
 
 
 class BttExportPDF(BttExport):
     def __init__(self, img):
-        super(BttExportPDF, self).__init__("pdf")
-        self.pixmap = QPixmap(
-            "{img_media}{img}".format(
-                img_media=CConstants.img_cmedia, img="{}.png".format(img)
-            )
-        )
+        super().__init__("pdf")
+        self.setToolTip("Exporter en PDF")
 
 
 # class FLineEdit(QLineEdit):

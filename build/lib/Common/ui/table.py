@@ -69,6 +69,10 @@ class FTableWidget(QTableWidget):
         self.wc = self.width()
         self.hc = self.height()
 
+    def setColumnWidth(self, column, width):
+        """PyQt6 exige un int ; les calculs avec ``/`` en Python 3 produisent des float."""
+        return super().setColumnWidth(column, int(round(width)))
+
     def dragMoveEvent(self, e):
         e.accept()
 

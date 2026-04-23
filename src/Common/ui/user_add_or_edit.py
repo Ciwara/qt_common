@@ -16,47 +16,74 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
     def __init__(self, pp=None, owner=None, parent=None, *args, **kwargs):
         QDialog.__init__(self, parent, *args, **kwargs)
 
-        self.setWindowTitle("👤 Nouvel utilisateur")
+        self.setWindowTitle("Nouvel utilisateur")
         self.parent = parent
         self.pp = pp
         self.owner = owner
 
         vbox = QVBoxLayout()
         formbox = QFormLayout()
-        self.checked = QCheckBox("✅ Compte actif")
-        self.checked.setToolTip("Cocher pour activer le compte utilisateur.\nUn compte inactif ne peut pas se connecter.")
+        self.checked = QCheckBox("Compte actif (peut se connecter)")
+        self.checked.setToolTip(
+            "Décochez pour bloquer la connexion sans supprimer le compte."
+        )
         self.error_mssg = ""
         
         if self.owner:
             self.new = False
-            self.title = f"✏️ Modification de l'utilisateur {self.owner.username}"
-            self.succes_msg = f"✅ L'utilisateur '{self.owner.username}' a été mis à jour avec succès"
+            self.title = f"Modifier l'utilisateur « {self.owner.username} »"
+            self.succes_msg = f"L'utilisateur « {self.owner.username} » a été mis à jour."
             if self.owner.isactive:
                 self.checked.setCheckState(Qt.CheckState.Checked)
         else:
             self.checked.setCheckState(Qt.CheckState.Checked)
             self.new = True
-            self.succes_msg = "🎉 Nouvel utilisateur créé avec succès"
-            self.title = "👤 Création d'un nouvel utilisateur"
+            self.succes_msg = "Nouvel utilisateur enregistré."
+            self.title = "Créer un utilisateur"
             self.owner = Owner()
-        # self.checked.setToolTip(msg)
         self.setWindowTitle(self.title)
+
+        self.head_label = FLabel(
+            f"<div style='font-size:15px;font-weight:600;color:#2c3e50;'>{self.title}</div>"
+        )
+        self.head_label.setTextFormat(Qt.TextFormat.RichText)
 
         self.username_field = LineEdit(self.owner.username)
         self.username_field.setEnabled(self.new)
-        self.username_field.setPlaceholderText("Nom d'utilisateur unique" if self.new else "Nom d'utilisateur (non modifiable)")
-        self.username_field.setToolTip("Identifiant unique pour la connexion" if self.new else "L'identifiant ne peut pas être modifié")
-        
+        self.username_field.setPlaceholderText(
+            "Identifiant de connexion (unique)" if self.new else ""
+        )
+        self.username_field.setToolTip(
+            "Identifiant unique pour la connexion"
+            if self.new
+            else "L'identifiant ne peut pas être modifié après création."
+        )
+
         self.password_field = LineEdit()
         self.password_field.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
-        self.password_field.setPlaceholderText("Mot de passe sécurisé")
-        self.password_field.setToolTip("Saisissez un mot de passe fort (min. 6 caractères recommandés)")
-        
+        if self.new:
+            self.password_field.setPlaceholderText("Mot de passe")
+            self.password_field.setToolTip(
+                "Au moins 8 caractères, majuscule, minuscule, chiffre et signe recommandés."
+            )
+        else:
+            self.password_field.setPlaceholderText(
+                "Laisser vide pour ne pas changer le mot de passe"
+            )
+            self.password_field.setToolTip(
+                "Renseignez un nouveau mot de passe uniquement si vous souhaitez le remplacer."
+            )
+
         self.password_field_v = LineEdit()
         self.password_field_v.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
-        self.password_field_v.setPlaceholderText("Confirmer le mot de passe")
-        self.password_field_v.setToolTip("Resaisissez le même mot de passe pour confirmation")
+        self.password_field_v.setPlaceholderText(
+            "Confirmer le mot de passe" if self.new else "Confirmer le nouveau mot de passe"
+        )
+        self.password_field_v.setToolTip(
+            "Même saisie que le champ mot de passe."
+        )
         self.password_field_v.textChanged.connect(self.check_password_is_valide)
+        self.password_field.textChanged.connect(self.check_password_is_valide)
         
         self.phone_field = IntLineEdit(self.owner.phone)
         self.phone_field.setPlaceholderText("Numéro de téléphone")
@@ -66,8 +93,8 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         # Combobox widget avec icônes
         self.box_group = QComboBox()
         group_labels = {
-            Owner.ADMIN: "👑 Administrateur",
-            Owner.USER: "👤 Utilisateur standard"
+            Owner.ADMIN: "Administrateur (accès complet)",
+            Owner.USER: "Utilisateur (accès standard)",
         }
         
         for index in self.liste_group:
@@ -79,24 +106,23 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
             "• Utilisateur standard : Accès limité aux fonctionnalités de base"
         )
 
-        butt = ButtonSave("💾 Enregistrer l'utilisateur")
-        butt.setToolTip("Sauvegarder les informations de l'utilisateur")
+        butt = ButtonSave("Enregistrer")
+        butt.setToolTip("Enregistrer le compte utilisateur")
         butt.clicked.connect(self.add_or_edit_user)
-        
-        cancel_but = Button("❌ Annuler")
-        cancel_but.setToolTip("Fermer sans sauvegarder")
+        butt.setDefault(True)
+
+        cancel_but = Button("Annuler")
+        cancel_but.setToolTip("Fermer sans enregistrer")
         cancel_but.clicked.connect(self.cancel)
 
-        formbox.addRow(FLabel("👤 Identifiant"), self.username_field)
-        formbox.addRow(FLabel("🔒 Mot de passe"), self.password_field)
-        if self.new:
-            formbox.addRow(
-                FLabel("🔐 Confirmation mot de passe"), self.password_field_v
-            )
-        formbox.addRow(FLabel("📞 Numéro de téléphone"), self.phone_field)
-        formbox.addRow(FLabel("🎭 Groupe d'accès"), self.box_group)
-        formbox.addRow(cancel_but, butt)
+        vbox.addWidget(self.head_label)
         vbox.addWidget(self.checked)
+        formbox.addRow(FLabel("Identifiant"), self.username_field)
+        formbox.addRow(FLabel("Mot de passe"), self.password_field)
+        formbox.addRow(FLabel("Confirmation"), self.password_field_v)
+        formbox.addRow(FLabel("Téléphone"), self.phone_field)
+        formbox.addRow(FLabel("Rôle"), self.box_group)
+        formbox.addRow(cancel_but, butt)
         vbox.addLayout(formbox)
         self.setLayout(vbox)
 
@@ -114,13 +140,11 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         if has_changes:
             reply = QMessageBox.question(
                 self,
-                "⚠️ Modifications non enregistrées",
-                "Vous avez apporté des modifications qui ne sont pas sauvegardées.\n\n"
-                "Voulez-vous vraiment fermer sans enregistrer ?\n\n"
-                "💡 Cliquez sur 'Non' pour revenir au formulaire\n"
-                "et sauvegarder vos modifications.",
+                "Modifications non enregistrées",
+                "Fermer sans enregistrer les changements ?\n\n"
+                "Choisissez « Non » pour revenir au formulaire.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
+                QMessageBox.StandardButton.No,
             )
             
             if reply == QMessageBox.StandardButton.Yes:
@@ -135,78 +159,83 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
     def is_valide(self):
         """Validation complète du formulaire"""
         from PyQt6.QtWidgets import QMessageBox
-        
+
         if check_is_empty(self.username_field):
             QMessageBox.warning(
                 self,
-                "⚠️ Champ obligatoire",
-                "👤 L'identifiant utilisateur est requis.\n\n"
-                "Veuillez saisir un nom d'utilisateur unique."
+                "Champ obligatoire",
+                "L'identifiant de connexion est obligatoire.",
             )
             return False
-            
-        if check_is_empty(self.password_field):
-            QMessageBox.warning(
-                self,
-                "⚠️ Champ obligatoire",
-                "🔒 Le mot de passe est requis.\n\n"
-                "Veuillez saisir un mot de passe sécurisé."
-            )
-            return False
-            
-        if self.new and check_is_empty(self.password_field_v):
-            QMessageBox.warning(
-                self,
-                "⚠️ Champ obligatoire",
-                "🔐 La confirmation du mot de passe est requise.\n\n"
-                "Veuillez confirmer votre mot de passe."
-            )
-            return False
-            
+
+        password = str(self.password_field.text()).strip()
+
+        if self.new:
+            if not password:
+                QMessageBox.warning(
+                    self,
+                    "Champ obligatoire",
+                    "Le mot de passe est obligatoire pour un nouvel utilisateur.",
+                )
+                return False
+            if check_is_empty(self.password_field_v):
+                QMessageBox.warning(
+                    self,
+                    "Champ obligatoire",
+                    "Veuillez confirmer le mot de passe.",
+                )
+                return False
+        elif password:
+            if str(self.password_field_v.text()).strip() != password:
+                QMessageBox.warning(
+                    self,
+                    "Confirmation",
+                    "Le mot de passe et sa confirmation ne correspondent pas.",
+                )
+                return False
+
         if not self.check_password_is_valide():
             return False
-            
-        # Validation de la force du mot de passe (avertissement seulement, ne bloque pas)
-        password = str(self.password_field.text()).strip()
-        is_valid, message = Owner.validate_password(password)
-        if not is_valid:
+
+        # Avertissement mot de passe faible (ne bloque pas)
+        if password:
+            is_valid, message = Owner.validate_password(password)
+        else:
+            is_valid, message = True, ""
+
+        if password and not is_valid:
             # Afficher seulement un avertissement, ne pas bloquer la création
             QMessageBox.warning(
                 self,
-                "⚠️ Avertissement : Mot de passe faible",
-                f"🔒 {message}\n\n"
-                "⚠️ Attention : Votre mot de passe ne respecte pas les recommandations de sécurité.\n\n"
-                "Recommandations pour un mot de passe fort :\n"
-                "• Au moins 8 caractères\n"
-                "• Au moins une majuscule\n"
-                "• Au moins une minuscule\n"
-                "• Au moins un chiffre\n"
-                "• Au moins un caractère spécial\n\n"
-                "💡 Vous pouvez continuer, mais il est fortement recommandé d'utiliser un mot de passe plus sécurisé."
+                "Mot de passe faible",
+                f"{message}\n\n"
+                "Recommandations : au moins 8 caractères, une majuscule, une minuscule, "
+                "un chiffre et un caractère spécial.\n\n"
+                "Vous pouvez continuer, mais un mot de passe plus robuste est conseillé.",
             )
-            # Ne pas retourner False, permettre la création avec un avertissement
-            
+
         return True
 
     def check_password_is_valide(self):
-        """Vérification de la correspondance des mots de passe"""
-        self.password = str(self.password_field.text())
-        self.password_v = (
-            str(self.password_field_v.text()) if self.new else self.owner.password
-        )
+        """Vérifie la correspondance mot de passe / confirmation."""
+        pwd = str(self.password_field.text()).strip()
+        pwd_v = str(self.password_field_v.text()).strip()
 
-        error_message = (
-            "🔐 Les mots de passe ne correspondent pas.\n\nVérifiez votre saisie et réessayez."
-            if self.new
-            else "🔒 Mot de passe incorrect pour cet utilisateur."
-        )
+        if not pwd and not self.new:
+            return True
 
-        if is_valide_codition_field(
-            self.password_field_v,
-            error_message,
-            self.password != self.password_v,
-        ):
-            return False
+        if self.new:
+            err = "Les mots de passe ne correspondent pas."
+            if is_valide_codition_field(
+                self.password_field_v, err, pwd != pwd_v
+            ):
+                return False
+            return True
+
+        if pwd:
+            err = "La confirmation ne correspond pas au nouveau mot de passe."
+            if is_valide_codition_field(self.password_field_v, err, pwd != pwd_v):
+                return False
         return True
 
     def add_or_edit_user(self):
@@ -221,23 +250,16 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
         group = self.liste_group[self.box_group.currentIndex()]
         status = self.checked.checkState() == Qt.CheckState.Checked
 
-        # 📋 Logging des informations
-        action = "Création" if self.new else "Modification"
-        print(f"👤 {action} utilisateur: {username}")
-        print(f"📞 Téléphone: {phone}")
-        print(f"🎭 Groupe: {group}")
-        print(f"✅ Statut actif: {status}")
-
         ow = self.owner
         ow.username = username
-        ow.password = ow.crypt_password(password) if self.new else password
+        if self.new or password:
+            ow.password = ow.crypt_password(password)
         ow.phone = phone
         ow.group = group
         ow.isactive = status
-        
+
         try:
             ow.save()
-            self.close()
             self.accept()
             
             # 🎉 Messages de succès et rafraîchissement
@@ -259,37 +281,33 @@ class NewOrEditUserViewWidget(QDialog, FWidget):
                 
                 if self.parent:
                     status_text = "activé" if status else "désactivé"
-                    group_text = "👑 Administrateur" if group == Owner.ADMIN else "👤 Utilisateur"
-                    
-                    success_message = (
-                        f"🎉 Utilisateur '{username}' {'créé' if self.new else 'modifié'} avec succès !\n\n"
-                        f"📋 Informations :\n"
-                        f"• Identifiant : {username}\n"
-                        f"• Téléphone : {phone or 'Non renseigné'}\n"
-                        f"• Groupe : {group_text}\n"
-                        f"• Statut : {status_text}"
+                    group_text = (
+                        "Administrateur" if group == Owner.ADMIN else "Utilisateur"
                     )
-                    
+                    verb = "créé" if self.new else "mis à jour"
+                    success_message = (
+                        f"Utilisateur « {username} » {verb}.\n"
+                        f"Téléphone : {phone or '—'} ; rôle : {group_text} ; compte {status_text}."
+                    )
                     self.parent.Notify(success_message, "success")
                     
                     # Mettre à jour les statistiques si disponible (via la fenêtre principale)
                     if hasattr(self.parent, 'update_stats'):
                         self.parent.update_stats()
                     
-        except IntegrityError as e:
+        except IntegrityError:
             print(f"❌ Erreur d'intégrité - utilisateur '{username}' existe déjà")
             field_error(
                 self.username_field,
-                f"❌ Nom d'utilisateur déjà utilisé\n\n"
-                f"L'identifiant '{username}' existe déjà dans la base de données.\n"
-                f"Veuillez choisir un autre nom d'utilisateur."
+                f"L'identifiant « {username} » est déjà utilisé. "
+                f"Choisissez un autre nom.",
             )
         except Exception as e:
             print(f"❌ Erreur lors de la sauvegarde: {e}")
             if self.parent:
                 self.parent.Notify(
-                    f"❌ Erreur lors de la sauvegarde de l'utilisateur\n\n"
-                    f"Détails techniques : {e}", "error"
+                    f"Erreur lors de l'enregistrement du compte.\nDétail : {e}",
+                    "error",
                 )
         # else:
         #     self.parent.Notify(

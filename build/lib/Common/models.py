@@ -183,6 +183,8 @@ class Owner(BaseModel):
 
     username = peewee.CharField(max_length=30, unique=True, verbose_name="Identifiant")
     group = peewee.CharField(default=USER)
+    # Anciennes bases SQLite : colonne NOT NULL sans défaut si absente du modèle
+    islog = peewee.BooleanField(default=False)
     is_identified = peewee.BooleanField(default=False)
     phone = peewee.CharField(max_length=30, null=True, verbose_name="Telephone")
     password = peewee.CharField(max_length=150)
@@ -201,6 +203,7 @@ class Owner(BaseModel):
         return {
             "username": self.username,
             "group": self.group,
+            "islog": self.islog,
             "is_identified": self.is_identified,
             "phone": self.phone,
             "password": self.password,
@@ -233,7 +236,14 @@ class Owner(BaseModel):
         """Vérifie si le mot de passe correspond au hachage stocké"""
         if not password or not self.password:
             return False
-        return bcrypt.checkpw(password.encode('utf-8'), self.password.encode('utf-8'))
+        if not self.password.startswith("$2"):
+            return False
+        try:
+            return bcrypt.checkpw(
+                password.encode("utf-8"), self.password.encode("utf-8")
+            )
+        except ValueError:
+            return False
 
     @staticmethod
     def validate_password(password):
@@ -891,6 +901,46 @@ def list_owners_by_group(exclude_superuser=True):
         logger.error(f"Erreur lors du groupement des propriétaires: {e}")
         return {}
 
+def _ensure_legacy_sqlite_columns():
+    """Ajoute les colonnes manquantes (BD créées avant l’évolution des modèles Common).
+
+    `create_tables(..., safe=True)` ne fait pas d’ALTER TABLE ; les anciennes bases
+    SQLite provoquent alors des erreurs du type « no such column: t1.auth_required ».
+    """
+    specs = {
+        "settings": [
+            ("auth_required", "INTEGER NOT NULL DEFAULT 1"),
+        ],
+        "owner": [
+            ("is_identified", "INTEGER NOT NULL DEFAULT 0"),
+            ("login_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("reset_token", "VARCHAR(64)"),
+            ("reset_token_expiry", "DATETIME"),
+        ],
+    }
+    try:
+        for table, columns in specs.items():
+            row = dbh.execute_sql(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if not row:
+                continue
+            existing = {
+                r[1] for r in dbh.execute_sql("PRAGMA table_info(%s)" % table).fetchall()
+            }
+            for col_name, col_def in columns:
+                if col_name not in existing:
+                    dbh.execute_sql(
+                        "ALTER TABLE %s ADD COLUMN %s %s" % (table, col_name, col_def)
+                    )
+                    logger.info(
+                        "Migration schéma legacy: %s.%s ajoutée", table, col_name
+                    )
+    except Exception as e:
+        logger.warning("Migration schéma legacy SQLite: %s", e)
+
+
 def init_database():
     """Initialise la base de données et crée les tables si nécessaire"""
     global dbh, router
@@ -939,6 +989,8 @@ def init_database():
         # Création des tables
         dbh.create_tables(models, safe=True)
         logger.info("Tables créées avec succès")
+
+        _ensure_legacy_sqlite_columns()
         
         # Initialisation des paramètres par défaut
         Settings.init_settings()

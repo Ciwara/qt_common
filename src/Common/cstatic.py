@@ -167,6 +167,9 @@ list_models = []
 CLEANABLE_MODELS = []
 # Prérequis : avant de vider une table, vider d’abord ces modèles (clé → liste de classes).
 CLEAN_MODEL_PREREQUISITES = {}
+# Rempli par l’appli (ex. G-Sady) : callable sans argument retournant les lignes
+# pour l’onglet « Historique » de l’admin (liste de tuples pour le tableau).
+ADMIN_HISTORY_FETCH = None
 APP_LOGO = os.path.join(img_media, "logo.png")
 APP_LOGO_ICO = os.path.join(img_media, "logo.ico")
 ExportFolders = []
@@ -233,6 +236,7 @@ class CConstants:
     list_models = list_models
     CLEANABLE_MODELS = CLEANABLE_MODELS
     CLEAN_MODEL_PREREQUISITES = CLEAN_MODEL_PREREQUISITES
+    ADMIN_HISTORY_FETCH = ADMIN_HISTORY_FETCH
     APP_LOGO = APP_LOGO
     APP_LOGO_ICO = APP_LOGO_ICO
     ExportFolders = ExportFolders
