@@ -298,6 +298,17 @@ def cmain(test=False):
         except Exception as e:
             logger.warning("Thème au démarrage ignoré: %s", e)
 
+        # Appliquer la taille de police enregistrée (accessibilité)
+        try:
+            from .ui.theme import apply_font_scale
+
+            if dbh is not None and dbh.is_closed():
+                dbh.connect()
+            _st = Settings.init_settings()
+            apply_font_scale(app, getattr(_st, "font_scale", 1.0) or 1.0, save_to_settings=False)
+        except Exception as e:
+            logger.warning("Taille police au démarrage ignorée: %s", e)
+
         # Tentative d'initialisation de la fenêtre principale
         window = None
 

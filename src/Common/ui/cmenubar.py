@@ -196,6 +196,23 @@ class FMenuBar(QMenuBar, FWidget):
             action = QAction(theme_label, self)
             action.triggered.connect(lambda checked, t=theme_id: self.set_theme(t))
             theme_menu.addAction(action)
+
+        # Sous-menu Taille de police (zoom)
+        font_menu = preference.addMenu("🔠 &Taille de police")
+        zoom_in = QAction("Zoom +", self)
+        zoom_in.setShortcut("Ctrl++")
+        zoom_in.triggered.connect(lambda *_: self._change_font_scale(+0.1))
+        font_menu.addAction(zoom_in)
+
+        zoom_out = QAction("Zoom -", self)
+        zoom_out.setShortcut("Ctrl+-")
+        zoom_out.triggered.connect(lambda *_: self._change_font_scale(-0.1))
+        font_menu.addAction(zoom_out)
+
+        zoom_reset = QAction("Réinitialiser (100%)", self)
+        zoom_reset.setShortcut("Ctrl+0")
+        zoom_reset.triggered.connect(lambda *_: self._set_font_scale(1.0))
+        font_menu.addAction(zoom_reset)
         
         # Séparateur avant le menu administration
         preference.addSeparator()
@@ -298,6 +315,39 @@ class FMenuBar(QMenuBar, FWidget):
         exit_.setToolTip("Quiter l'application")
         exit_.triggered.connect(self.parent.close)
         self.file_.addAction(exit_)
+
+    def _set_font_scale(self, scale: float):
+        """Applique et persiste une échelle de police globale."""
+        try:
+            from .theme import apply_font_scale
+            app = QApplication.instance()
+            if app:
+                apply_font_scale(app, scale, save_to_settings=True)
+                # Rafraîchir les widgets pour prendre en compte le changement
+                try:
+                    for w in app.topLevelWidgets():
+                        w.update()
+                        w.repaint()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Changement taille police ignoré: {e}")
+
+    def _change_font_scale(self, delta: float):
+        """Augmente/diminue l'échelle de police globale."""
+        try:
+            from .theme import change_font_scale
+            app = QApplication.instance()
+            if app:
+                change_font_scale(app, delta)
+                try:
+                    for w in app.topLevelWidgets():
+                        w.update()
+                        w.repaint()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Zoom police ignoré: {e}")
 
     def logout(self):
         from .login import LoginWidget

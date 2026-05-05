@@ -630,6 +630,8 @@ class Settings(BaseModel):
     url = peewee.CharField(default="http://file-repo.ml")
     theme = peewee.CharField(default="default")
     devise = peewee.CharField(choices=DEVISE, default=XOF)
+    # Échelle de police globale (1.0 = défaut). Utilisée pour l'accessibilité.
+    font_scale = peewee.FloatField(default=1.0)
 
     @classmethod
     def init_settings(cls):
@@ -649,8 +651,8 @@ class Settings(BaseModel):
                     
                 query = """
                 INSERT OR REPLACE INTO settings 
-                (id, is_syncro, last_update_date, slug, auth_required, after_cam, toolbar, toolbar_position, url, theme, devise)
-                VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, is_syncro, last_update_date, slug, auth_required, after_cam, toolbar, toolbar_position, url, theme, devise, font_scale)
+                VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 dbh.execute_sql(query, [
                     cls.DEFAULT,      # slug
@@ -660,7 +662,8 @@ class Settings(BaseModel):
                     cls.LEFT,         # toolbar_position
                     "http://file-repo.ml",  # url
                     "system",        # theme
-                    cls.XOF           # devise
+                    cls.XOF,          # devise
+                    1.0,              # font_scale
                 ])
                 logger.debug("Paramètres créés avec succès via SQL")
                 
@@ -680,7 +683,8 @@ class Settings(BaseModel):
                     toolbar_position=cls.LEFT,
                     url="http://file-repo.ml",
                     theme="default",
-                    devise=cls.XOF
+                    devise=cls.XOF,
+                    font_scale=1.0,
                 )
                 settings.save()
                 logger.debug("Paramètres créés avec succès via fallback")
@@ -697,6 +701,7 @@ class Settings(BaseModel):
             "url": self.url,
             "theme": self.theme,
             "devise": self.devise,
+            "font_scale": self.font_scale,
             "is_syncro": self.is_syncro,
             "last_update_date": datetime_to_str(self.last_update_date),
         }
@@ -921,13 +926,16 @@ def _ensure_legacy_sqlite_columns():
     """Ajoute les colonnes manquantes (BD créées avant l’évolution des modèles Common).
 
     `create_tables(..., safe=True)` ne fait pas d’ALTER TABLE ; les anciennes bases
-    SQLite provoquent alors des erreurs du type « no such column: t1.auth_required ».
+    SQLite provoquent alors des erreurs du type « no such column: t1.auth_required »
+    ou « no such column: t1.islog ».
     """
     specs = {
         "settings": [
             ("auth_required", "INTEGER NOT NULL DEFAULT 1"),
+            ("font_scale", "REAL NOT NULL DEFAULT 1.0"),
         ],
         "owner": [
+            ("islog", "INTEGER NOT NULL DEFAULT 0"),
             ("is_identified", "INTEGER NOT NULL DEFAULT 0"),
             ("login_count", "INTEGER NOT NULL DEFAULT 0"),
             ("reset_token", "VARCHAR(64)"),
