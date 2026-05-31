@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: Common
+Version: 0.3
+Summary: Pyqt Common Project
+Author-email: Fadiga Ibrahima <faddev@gmail.com>
+License: GPL-3.0-or-later
+Keywords: q5
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
+Requires-Python: >=3.6
+Requires-Dist: peewee>=3.17.1
+Requires-Dist: PyQt6>=6.0.0
+Requires-Dist: requests>=2.0.0
+Requires-Dist: psutil>=5.9.0
+Requires-Dist: gettext_windows>=1.0
+Requires-Dist: peewee-migrate>=1.0.0
+Requires-Dist: bcrypt>=4.3.0
+Dynamic: requires-python

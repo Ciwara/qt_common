@@ -3,7 +3,7 @@
 # vim: ai ts=4 sts=4 et sw=4 nu
 # maintainer: Fad
 
-from PyQt6.QtGui import QIcon, QPixmap, QAction
+from PyQt6.QtGui import QIcon, QPixmap, QAction, QActionGroup
 from PyQt6.QtWidgets import QApplication, QMenuBar, QMessageBox, QDialog
 
 from ..exports import export_backup, export_database_as_file, import_backup
@@ -34,6 +34,29 @@ class FMenuBar(QMenuBar, FWidget):
             ):
                 return menu
         return None
+
+    @staticmethod
+    def _current_theme_choice(default_theme, theme_names):
+        """Retourne le thème enregistré à cocher dans le menu."""
+        try:
+            settings = Settings.init_settings()
+            theme = str(getattr(settings, "theme", "") or "").strip().lower()
+        except Exception:
+            theme = ""
+        if theme in ("", "default"):
+            return default_theme
+        if theme not in theme_names:
+            return default_theme
+        return theme
+
+    def _mark_theme_choice(self, theme_name):
+        """Coche l'action correspondant au thème choisi, si le menu existe déjà."""
+        normalized = str(theme_name or "").strip().lower()
+        if normalized in ("", "default"):
+            normalized = "system"
+        action = getattr(self, "theme_actions", {}).get(normalized)
+        if action is not None:
+            action.setChecked(True)
 
     def __init__(self, parent=None, admin=False, *args, **kwargs):
         QMenuBar.__init__(self, parent=parent, *args, **kwargs)
@@ -186,14 +209,23 @@ class FMenuBar(QMenuBar, FWidget):
         preference.addAction(preferences_action)
         
         # Sous-menu Thème (clair / sombre / système)
-        from .theme import THEME_LIGHT, THEME_DARK, THEME_SYSTEM, get_theme_display_name
+        from .theme import THEME_LIGHT, THEME_DARK, THEME_SYSTEM, THEME_NAMES, get_theme_display_name
         theme_menu = preference.addMenu("🎨 &Thème")
+        current_theme = self._current_theme_choice(THEME_SYSTEM, THEME_NAMES)
+        self.theme_actions = {}
+        self.theme_action_group = QActionGroup(self)
+        self.theme_action_group.setExclusive(True)
         for theme_id, theme_label in [
             (THEME_LIGHT, get_theme_display_name(THEME_LIGHT)),
             (THEME_DARK, get_theme_display_name(THEME_DARK)),
             (THEME_SYSTEM, get_theme_display_name(THEME_SYSTEM)),
         ]:
             action = QAction(theme_label, self)
+            action.setCheckable(True)
+            action.setChecked(theme_id == current_theme)
+            action.setData(theme_id)
+            self.theme_action_group.addAction(action)
+            self.theme_actions[theme_id] = action
             action.triggered.connect(lambda checked, t=theme_id: self.set_theme(t))
             theme_menu.addAction(action)
 
@@ -700,14 +732,16 @@ Fichier à relancer: {main_file}"""
         theme_name: "light", "dark" ou "system".
         """
         if self.parent and hasattr(self.parent, "set_theme"):
+            self._mark_theme_choice(theme_name)
             self.parent.set_theme(theme_name)
             return
-        from .theme import apply_theme, get_theme_display_name, THEME_NAMES
+        from .theme import THEME_SYSTEM, apply_theme, get_theme_display_name, THEME_NAMES
         from PyQt6.QtWidgets import QMessageBox
         app = QApplication.instance()
         if theme_name not in THEME_NAMES:
-            theme_name = "light"
+            theme_name = THEME_SYSTEM
         if apply_theme(app, theme_name, save_to_settings=True):
+            self._mark_theme_choice(theme_name)
             display_name = get_theme_display_name(theme_name)
             QMessageBox.information(
                 self.parent or self,

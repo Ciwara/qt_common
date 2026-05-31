@@ -54,11 +54,11 @@ class LoginWidget(FDialog, FWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setMinimumSize(480, 560)
         self.resize(520, 640)
-        # self.setStyleSheet(
-        #     """
-        #     #LoginRoot { background-color: palette(alternate-base); }
-        #     """
-        # )
+        self.setStyleSheet(
+            """
+            #LoginRoot { background-color: palette(alternate-base); }
+            """
+        )
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(28, 28, 28, 28)
@@ -69,15 +69,15 @@ class LoginWidget(FDialog, FWidget):
         self._card = QFrame()
         self._card.setObjectName("loginCard")
         self._card.setMaximumWidth(440)
-        # self._card.setStyleSheet(
-        #     """
-        #     #loginCard {
-        #         background-color: palette(base);
-        #         border: 1px solid palette(midlight);
-        #         border-radius: 14px;
-        #     }
-        #     """
-        # )
+        self._card.setStyleSheet(
+            """
+            #loginCard {
+                background-color: palette(base);
+                border: 1px solid palette(midlight);
+                border-radius: 14px;
+            }
+            """
+        )
         try:
             shadow = QGraphicsDropShadowEffect(self._card)
             shadow.setBlurRadius(22)
@@ -92,16 +92,16 @@ class LoginWidget(FDialog, FWidget):
 
         accent = QFrame()
         accent.setFixedHeight(4)
-        # accent.setStyleSheet(
-        #     """
-        #     QFrame {
-        #         background-color: palette(highlight);
-        #         border: none;
-        #         border-top-left-radius: 13px;
-        #         border-top-right-radius: 13px;
-        #     }
-        #     """
-        # )
+        accent.setStyleSheet(
+            """
+            QFrame {
+                background-color: palette(highlight);
+                border: none;
+                border-top-left-radius: 13px;
+                border-top-right-radius: 13px;
+            }
+            """
+        )
         card_layout.addWidget(accent)
 
         inner = QWidget()
@@ -263,19 +263,19 @@ class LoginWidget(FDialog, FWidget):
         self.close_btn.setToolTip("Fermer")
         self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_btn.setFixedSize(28, 28)
-        # self.close_btn.setStyleSheet(
-        #     """
-        #     QToolButton {
-        #         border: 1px solid palette(midlight);
-        #         border-radius: 6px;
-        #         background-color: palette(base);
-        #         color: palette(text);
-        #         font-size: 16px;
-        #     }
-        #     QToolButton:hover { background-color: palette(alternate-base); }
-        #     QToolButton:pressed { background-color: palette(midlight); }
-        #     """
-        # )
+        self.close_btn.setStyleSheet(
+            """
+            QToolButton {
+                border: 1px solid palette(midlight);
+                border-radius: 6px;
+                background-color: palette(base);
+                color: palette(text);
+                font-size: 16px;
+            }
+            QToolButton:hover { background-color: palette(alternate-base); }
+            QToolButton:pressed { background-color: palette(midlight); }
+            """
+        )
         self.close_btn.clicked.connect(self.cancel)
         top_row.addWidget(self.close_btn, 0, Qt.AlignmentFlag.AlignRight)
         header_layout.addLayout(top_row)
@@ -301,14 +301,14 @@ class LoginWidget(FDialog, FWidget):
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setWordWrap(True)
-        # title_label.setStyleSheet(
-        #     """
-        #     QLabel {
-        #         color: palette(text);
-        #         padding: 4px 8px;
-        #     }
-        #     """
-        # )
+        title_label.setStyleSheet(
+            """
+            QLabel {
+                color: palette(text);
+                padding: 4px 8px;
+            }
+            """
+        )
         header_layout.addWidget(title_label)
 
         org_details = []
@@ -329,25 +329,25 @@ class LoginWidget(FDialog, FWidget):
         subtitle_label = QLabel(subtitle_text)
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle_label.setWordWrap(True)
-        # subtitle_label.setStyleSheet(
-        #     """
-        #     QLabel {
-        #         color: palette(mid);
-        #         font-size: 11px;
-        #         padding: 2px 6px;
-        #         line-height: 1.45;
-        #     }
-        #     """
-        # )
+        subtitle_label.setStyleSheet(
+            """
+            QLabel {
+                color: palette(mid);
+                font-size: 11px;
+                padding: 2px 6px;
+                line-height: 1.45;
+            }
+            """
+        )
         header_layout.addWidget(subtitle_label)
 
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setFrameShadow(QFrame.Shadow.Plain)
         separator.setFixedHeight(1)
-        # separator.setStyleSheet(
-        #     "QFrame { background-color: palette(midlight); border: none; max-height: 1px; }"
-        # )
+        separator.setStyleSheet(
+            "QFrame { background-color: palette(midlight); border: none; max-height: 1px; }"
+        )
         header_layout.addWidget(separator)
 
     def create_footer(self):
@@ -436,28 +436,28 @@ class LoginWidget(FDialog, FWidget):
         self.box_username = QComboBox()
         self.box_username.setToolTip("Compte utilisateur")
         self.box_username.setMinimumHeight(44)
-        # self.box_username.setStyleSheet(
-        #     """
-        #     QComboBox {
-        #         padding: 10px 14px;
-        #         border: 1px solid palette(midlight);
-        #         border-radius: 8px;
-        #         font-size: 14px;
-        #         background-color: palette(base);
-        #         color: palette(text);
-        #     }
-        #     QComboBox:hover { border-color: palette(highlight); }
-        #     QComboBox:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
-        #     QComboBox::drop-down { border: none; width: 28px; }
-        #     QComboBox::down-arrow {
-        #         image: none;
-        #         border-left: 5px solid transparent;
-        #         border-right: 5px solid transparent;
-        #         border-top: 6px solid palette(text);
-        #         margin-right: 8px;
-        #     }
-        #     """
-        # )
+        self.box_username.setStyleSheet(
+            """
+            QComboBox {
+                padding: 10px 14px;
+                border: 1px solid palette(midlight);
+                border-radius: 8px;
+                font-size: 14px;
+                background-color: palette(base);
+                color: palette(text);
+            }
+            QComboBox:hover { border-color: palette(highlight); }
+            QComboBox:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
+            QComboBox::drop-down { border: none; width: 28px; }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid palette(text);
+                margin-right: 8px;
+            }
+            """
+        )
 
         for index in self.liste_username:
             badge = "Admin" if index.group == Owner.ADMIN else "Utilisateur"
@@ -472,20 +472,20 @@ class LoginWidget(FDialog, FWidget):
         self.password_field.setToolTip("Mot de passe du compte sélectionné")
         self.password_field.setMinimumHeight(44)
         self.password_field.setAccessibleName("Mot de passe")
-        # self.password_field.setStyleSheet(
-        #     """
-        #     QLineEdit {
-        #         padding: 10px 14px;
-        #         border: 1px solid palette(midlight);
-        #         border-radius: 8px;
-        #         font-size: 14px;
-        #         background-color: palette(base);
-        #         color: palette(text);
-        #     }
-        #     QLineEdit:hover { border-color: palette(highlight); }
-        #     QLineEdit:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
-        #     """
-        # )
+        self.password_field.setStyleSheet(
+            """
+            QLineEdit {
+                padding: 10px 14px;
+                border: 1px solid palette(midlight);
+                border-radius: 8px;
+                font-size: 14px;
+                background-color: palette(base);
+                color: palette(text);
+            }
+            QLineEdit:hover { border-color: palette(highlight); }
+            QLineEdit:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
+            """
+        )
         self.password_field.returnPressed.connect(self.login)
         self.password_field.installEventFilter(self)
 
@@ -509,16 +509,16 @@ class LoginWidget(FDialog, FWidget):
         self.login_error = ErrorLabel("")
         self.login_error.setWordWrap(True)
         self.login_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.login_error.setStyleSheet(
-        #     """
-        #     QLabel {
-        #         padding: 8px;
-        #         border-radius: 6px;
-        #         background-color: palette(alternate-base);
-        #         min-height: 18px;
-        #     }
-        #     """
-        # )
+        self.login_error.setStyleSheet(
+            """
+            QLabel {
+                padding: 8px;
+                border-radius: 6px;
+                background-color: palette(alternate-base);
+                min-height: 18px;
+            }
+            """
+        )
         formbox.addRow(FormLabel(""), self.login_error)
 
         buttons_layout = QHBoxLayout()
@@ -533,25 +533,25 @@ class LoginWidget(FDialog, FWidget):
         self.login_button.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        # self.login_button.setStyleSheet(
-        #     """
-        #     QPushButton {
-        #         background-color: palette(highlight);
-        #         color: palette(highlighted-text);
-        #         border: none;
-        #         border-radius: 8px;
-        #         padding: 12px 20px;
-        #         font-weight: 600;
-        #         font-size: 14px;
-        #     }
-        #     QPushButton:hover { background-color: palette(highlight); }
-        #     QPushButton:pressed { padding-top: 13px; padding-bottom: 11px; }
-        #     QPushButton:disabled {
-        #         background-color: palette(mid);
-        #         color: palette(placeholder-text);
-        #     }
-        #     """
-        # )
+        self.login_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: palette(highlight);
+                color: palette(highlighted-text);
+                border: none;
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-weight: 600;
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: palette(highlight); }
+            QPushButton:pressed { padding-top: 13px; padding-bottom: 11px; }
+            QPushButton:disabled {
+                background-color: palette(mid);
+                color: palette(placeholder-text);
+            }
+            """
+        )
         self.login_button.clicked.connect(self.login)
         self.login_button.setDefault(True)
         buttons_layout.addWidget(self.login_button, 2)
@@ -559,24 +559,24 @@ class LoginWidget(FDialog, FWidget):
         self.cancel_button = QPushButton("Quitter")
         self.cancel_button.setToolTip("Fermer l’application (Échap)")
         self.cancel_button.setMinimumHeight(48)
-        # self.cancel_button.setStyleSheet(
-        #     """
-        #     QPushButton {
-        #         background-color: palette(button);
-        #         color: palette(button-text);
-        #         border: 1px solid palette(midlight);
-        #         border-radius: 8px;
-        #         padding: 10px 16px;
-        #         font-weight: 500;
-        #         font-size: 13px;
-        #     }
-        #     QPushButton:hover { background-color: palette(midlight); }
-        #     QPushButton:disabled {
-        #         background-color: palette(alternate-base);
-        #         color: palette(placeholder-text);
-        #     }
-        #     """
-        # )
+        self.cancel_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: palette(button);
+                color: palette(button-text);
+                border: 1px solid palette(midlight);
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 500;
+                font-size: 13px;
+            }
+            QPushButton:hover { background-color: palette(midlight); }
+            QPushButton:disabled {
+                background-color: palette(alternate-base);
+                color: palette(placeholder-text);
+            }
+            """
+        )
         self.cancel_button.clicked.connect(self.cancel)
 
         if self.hibernate:
@@ -588,18 +588,18 @@ class LoginWidget(FDialog, FWidget):
 
         self.reset_button = Button("Mot de passe oublié ?")
         self.reset_button.setToolTip("Réinitialisation du mot de passe")
-        # self.reset_button.setStyleSheet(
-        #     """
-        #     QPushButton {
-        #         background-color: transparent;
-        #         color: palette(link);
-        #         border: none;
-        #         padding: 6px;
-        #         font-size: 12px;
-        #     }
-        #     QPushButton:hover { text-decoration: underline; }
-        #     """
-        # )
+        self.reset_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: transparent;
+                color: palette(link);
+                border: none;
+                padding: 6px;
+                font-size: 12px;
+            }
+            QPushButton:hover { text-decoration: underline; }
+            """
+        )
         self.reset_button.clicked.connect(self.show_reset_dialog)
         reset_layout = QHBoxLayout()
         reset_layout.addStretch()
@@ -607,25 +607,25 @@ class LoginWidget(FDialog, FWidget):
         reset_layout.addStretch()
         formbox.addRow(FormLabel(""), reset_layout)
 
-        # self.topLeftGroupBox.setStyleSheet(
-        #     """
-        #     QGroupBox {
-        #         font-weight: 600;
-        #         font-size: 15px;
-        #         border: none;
-        #         margin-top: 4px;
-        #         padding-top: 12px;
-        #         background-color: transparent;
-        #     }
-        #     QGroupBox::title {
-        #         subcontrol-origin: margin;
-        #         subcontrol-position: top left;
-        #         left: 2px;
-        #         padding: 0 4px 8px 0;
-        #         color: palette(text);
-        #     }
-        #     """
-        # )
+        self.topLeftGroupBox.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: 600;
+                font-size: 15px;
+                border: none;
+                margin-top: 4px;
+                padding-top: 12px;
+                background-color: transparent;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 2px;
+                padding: 0 4px 8px 0;
+                color: palette(text);
+            }
+            """
+        )
         self.topLeftGroupBox.setLayout(formbox)
 
     def is_valide(self):

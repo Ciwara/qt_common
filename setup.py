@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="qt_common",
-    version="3.0.0",
+    version="0.4",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[

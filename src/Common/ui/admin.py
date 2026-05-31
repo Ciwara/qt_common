@@ -828,7 +828,7 @@ class SettingsTableWidget(FWidget):
             # Créer un objet mock avec des valeurs par défaut
             self.settings = type('MockSettings', (), {
                 'url': 'http://file-repo.ml',
-                'theme': "default",
+                'theme': "system",
                 'auth_required': True,
                 'after_cam': 1,
                 'devise': Settings.XOF,
@@ -924,9 +924,9 @@ class SettingsTableWidget(FWidget):
             )
             print("settings.toolbar", settings.toolbar)
             settings.after_cam = int(self.box_vilgule.value())
-            # Thème désactivé - garder la valeur existante
+            # Thème désactivé - garder la valeur existante ; vide/default suit le système.
             if not hasattr(settings, 'theme') or not settings.theme:
-                settings.theme = "default"
+                settings.theme = "system"
             settings.devise = self.box_devise.itemData(self.box_devise.currentIndex())
             settings.toolbar_position = self.box_position.itemData(
                 self.box_position.currentIndex()

@@ -15,6 +15,80 @@ THEME_SYSTEM = "system"
 
 THEME_NAMES = (THEME_LIGHT, THEME_DARK, THEME_SYSTEM)
 
+# Valeurs historiques / vides → suivre le système par défaut
+_THEME_ALIASES_SYSTEM = frozenset(("", "default"))
+
+
+def _system_prefers_dark():
+    """True si le système signale un schéma de couleurs sombre (Qt 6.5+)."""
+    try:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QGuiApplication
+
+        scheme = QGuiApplication.styleHints().colorScheme()
+        return scheme == Qt.ColorScheme.Dark
+    except Exception:
+        return False
+
+
+def _effective_visual_theme(theme_name: str) -> str:
+    """
+    Thème réellement rendu (clair/sombre). Pour THEME_SYSTEM, suit l’OS.
+    """
+    if theme_name == THEME_SYSTEM:
+        return THEME_DARK if _system_prefers_dark() else THEME_LIGHT
+    return theme_name
+
+
+def _restore_font_scale_qss(app) -> None:
+    """Ré-injecte le QSS d’échelle de police après un setStyleSheet complet (thème)."""
+    try:
+        from ..models import Settings, dbh
+
+        if dbh is not None and dbh.is_closed():
+            dbh.connect()
+        sttg = Settings.get_or_none(Settings.id == 1)
+        if sttg is None:
+            return
+        apply_font_scale(app, float(getattr(sttg, "font_scale", 1.0) or 1.0), save_to_settings=False)
+    except Exception:
+        pass
+
+
+def attach_system_theme_listener(app) -> None:
+    """
+    Ré-applique le thème lorsque l’OS bascule clair/sombre si le réglage est « système ».
+    """
+    if app is None:
+        return
+    if getattr(app, "_common_theme_scheme_listener_attached", False):
+        return
+    setattr(app, "_common_theme_scheme_listener_attached", True)
+    try:
+        from PyQt6.QtGui import QGuiApplication
+
+        def _on_color_scheme_changed(_scheme=None):
+            try:
+                from ..models import Settings, dbh
+
+                if dbh is None:
+                    return
+                if dbh.is_closed():
+                    dbh.connect()
+                st = Settings.get_or_none(Settings.id == 1)
+                raw = (getattr(st, "theme", "") or "").strip().lower()
+                if raw in _THEME_ALIASES_SYSTEM:
+                    raw = THEME_SYSTEM
+                if raw == THEME_SYSTEM:
+                    apply_theme(app, THEME_SYSTEM, save_to_settings=False)
+            except Exception:
+                pass
+
+        QGuiApplication.styleHints().colorSchemeChanged.connect(_on_color_scheme_changed)
+    except Exception:
+        pass
+
+
 # Stylesheet pour le thème sombre
 THEME_DARK_STYLESHEET = """
     /* Base */
@@ -171,6 +245,233 @@ THEME_DARK_STYLESHEET = """
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
 """
 
+# Stylesheet pour le thème clair (moderne, cohérent avec le thème sombre)
+THEME_LIGHT_STYLESHEET = """
+    /* Base */
+    QMainWindow, QWidget {
+        background-color: #f4f6f9;
+        color: #1f2329;
+        selection-background-color: #2d7bdc;
+        selection-color: #ffffff;
+    }
+
+    /* Toolbars + buttons */
+    QToolBar {
+        background-color: #ffffff;
+        border: none;
+        border-bottom: 1px solid #e3e7ec;
+        spacing: 6px;
+    }
+    QToolBar::separator {
+        background-color: #e0e4ea;
+        width: 1px;
+        margin: 6px 4px;
+    }
+    QToolButton {
+        background-color: transparent;
+        color: #1f2329;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 6px 8px;
+    }
+    QToolButton:hover {
+        background-color: #eef2f7;
+        border-color: #d6dce4;
+    }
+    QToolButton:pressed {
+        background-color: #e1e8f1;
+        border-color: #c2cbd6;
+    }
+
+    /* Menus */
+    QMenuBar {
+        background-color: #ffffff;
+        color: #1f2329;
+        border-bottom: 1px solid #e3e7ec;
+    }
+    QMenuBar::item {
+        padding: 6px 10px;
+        background: transparent;
+    }
+    QMenuBar::item:selected {
+        background-color: #eef2f7;
+        border-radius: 6px;
+    }
+    QMenu {
+        background-color: #ffffff;
+        color: #1f2329;
+        border: 1px solid #e0e4ea;
+        padding: 6px;
+    }
+    QMenu::item {
+        padding: 6px 10px;
+        border-radius: 6px;
+    }
+    QMenu::item:selected {
+        background-color: #eef2f7;
+    }
+    QMenu::separator {
+        height: 1px;
+        background-color: #e8ebf0;
+        margin: 6px 6px;
+    }
+
+    /* Inputs */
+    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QDateTimeEdit, QComboBox {
+        background-color: #ffffff;
+        color: #1f2329;
+        border: 1px solid #cdd4dd;
+        border-radius: 8px;
+        padding: 8px 10px;
+    }
+    QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateTimeEdit:hover, QComboBox:hover {
+        border-color: #aab4c0;
+    }
+    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {
+        border: 2px solid #2d7bdc;
+        padding: 7px 9px;
+    }
+    QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateTimeEdit:disabled, QComboBox:disabled {
+        background-color: #f0f2f5;
+        color: #9aa3af;
+        border-color: #e3e7ec;
+    }
+    QComboBox::drop-down { border: none; width: 28px; }
+    QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #5a6470; margin-right: 8px; }
+
+    /* Buttons */
+    QPushButton {
+        background-color: #ffffff;
+        color: #1f2329;
+        border: 1px solid #cdd4dd;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    QPushButton:hover { background-color: #eef2f7; border-color: #aab4c0; }
+    QPushButton:pressed { background-color: #e1e8f1; }
+    QPushButton:disabled {
+        background-color: #f0f2f5;
+        color: #9aa3af;
+        border-color: #e3e7ec;
+    }
+
+    /* Tables / lists */
+    QTableView, QTableWidget, QListView, QTreeView {
+        background-color: #ffffff;
+        alternate-background-color: #f6f8fa;
+        color: #1f2329;
+        gridline-color: #e8ebf0;
+        border: 1px solid #e0e4ea;
+        border-radius: 8px;
+    }
+    QTableView::item:selected, QTableWidget::item:selected, QListView::item:selected, QTreeView::item:selected {
+        background-color: #2d7bdc;
+        color: #ffffff;
+    }
+    QHeaderView::section {
+        background-color: #f0f3f7;
+        color: #353b43;
+        padding: 6px;
+        border: none;
+        border-right: 1px solid #e3e7ec;
+        border-bottom: 1px solid #e3e7ec;
+    }
+
+    /* Tooltips */
+    QToolTip {
+        background-color: #2b2f36;
+        color: #ffffff;
+        border: 1px solid #2b2f36;
+        padding: 6px;
+        border-radius: 6px;
+    }
+
+    /* Scrollbars */
+    QScrollBar:vertical {
+        background: transparent;
+        width: 12px;
+        margin: 0px;
+    }
+    QScrollBar::handle:vertical {
+        background: #c5ccd6;
+        min-height: 28px;
+        border-radius: 6px;
+    }
+    QScrollBar::handle:vertical:hover { background: #aab4c0; }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+    QScrollBar:horizontal {
+        background: transparent;
+        height: 12px;
+        margin: 0px;
+    }
+    QScrollBar::handle:horizontal {
+        background: #c5ccd6;
+        min-width: 28px;
+        border-radius: 6px;
+    }
+    QScrollBar::handle:horizontal:hover { background: #aab4c0; }
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+"""
+
+
+def _light_palette():
+    """
+    Palette Qt claire cohérente avec THEME_LIGHT_STYLESHEET.
+    Définie en plus du stylesheet pour que les styles utilisant palette(...)
+    et les widgets basés sur QPalette restent consistants.
+    """
+    from PyQt6.QtGui import QColor, QPalette
+
+    p = QPalette()
+    window = QColor("#f4f6f9")
+    base = QColor("#ffffff")
+    alt_base = QColor("#f6f8fa")
+    text = QColor("#1f2329")
+    disabled_text = QColor("#9aa3af")
+    placeholder_text = QColor("#8a93a0")
+    mid = QColor("#cdd4dd")
+    midlight = QColor("#e0e4ea")
+    button = QColor("#ffffff")
+    highlight = QColor("#2d7bdc")
+    link = QColor("#1a66c9")
+    tooltip_base = QColor("#2b2f36")
+    tooltip_text = QColor("#ffffff")
+    highlighted_text = QColor("#ffffff")
+
+    p.setColor(QPalette.ColorRole.Window, window)
+    p.setColor(QPalette.ColorRole.WindowText, text)
+    p.setColor(QPalette.ColorRole.Base, base)
+    p.setColor(QPalette.ColorRole.AlternateBase, alt_base)
+    p.setColor(QPalette.ColorRole.Text, text)
+    p.setColor(QPalette.ColorRole.Button, button)
+    p.setColor(QPalette.ColorRole.ButtonText, text)
+    p.setColor(QPalette.ColorRole.Mid, mid)
+    p.setColor(QPalette.ColorRole.Midlight, midlight)
+    p.setColor(QPalette.ColorRole.Highlight, highlight)
+    p.setColor(QPalette.ColorRole.HighlightedText, highlighted_text)
+    p.setColor(QPalette.ColorRole.Link, link)
+    p.setColor(QPalette.ColorRole.ToolTipBase, tooltip_base)
+    p.setColor(QPalette.ColorRole.ToolTipText, tooltip_text)
+    try:
+        p.setColor(QPalette.ColorRole.PlaceholderText, placeholder_text)
+    except Exception:
+        pass
+
+    try:
+        p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
+        p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
+        p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_text)
+        p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Link, disabled_text)
+        try:
+            p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.PlaceholderText, disabled_text)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    return p
+
+
 def _dark_palette():
     """
     Palette Qt sombre cohérente.
@@ -239,14 +540,15 @@ def get_stylesheet(theme_name):
     Retourne le stylesheet Qt correspondant au thème.
 
     Args:
-        theme_name: "light", "dark" ou "system"
+        theme_name: "light", "dark" ou "system" (pour "system", utiliser d’abord
+            _effective_visual_theme pour obtenir light/dark effectif).
 
     Returns:
-        str: Stylesheet à appliquer (chaîne vide pour light/system).
+        str: Stylesheet à appliquer (thème clair ou sombre selon le cas).
     """
     if theme_name == THEME_DARK:
         return THEME_DARK_STYLESHEET
-    return ""
+    return THEME_LIGHT_STYLESHEET
 
 
 def apply_theme(app, theme_name, save_to_settings=True):
@@ -264,23 +566,29 @@ def apply_theme(app, theme_name, save_to_settings=True):
 
     if app is None:
         return False
-    if not theme_name or str(theme_name).strip().lower() in ("default",):
-        theme_name = THEME_LIGHT
-    elif theme_name not in THEME_NAMES:
-        theme_name = THEME_LIGHT
 
-    stylesheet = get_stylesheet(theme_name)
+    normalized = str(theme_name or "").strip().lower()
+    if normalized in _THEME_ALIASES_SYSTEM:
+        normalized = THEME_SYSTEM
+    elif normalized not in THEME_NAMES:
+        normalized = THEME_LIGHT
+
+    visual = _effective_visual_theme(normalized)
+    stylesheet = get_stylesheet(visual)
     app.setStyleSheet(stylesheet)
 
     # Palette: indispensable pour les styles qui utilisent palette(...)
-    if theme_name == THEME_DARK:
+    if visual == THEME_DARK:
         app.setPalette(_dark_palette())
     else:
-        # Revenir à la palette par défaut du style courant (light / system)
+        # Palette claire dédiée (cohérente avec THEME_LIGHT_STYLESHEET)
         try:
-            app.setPalette(QApplication.style().standardPalette())
+            app.setPalette(_light_palette())
         except Exception:
-            pass
+            try:
+                app.setPalette(QApplication.style().standardPalette())
+            except Exception:
+                pass
     if save_to_settings:
         try:
             from ..models import Settings, dbh
@@ -290,11 +598,13 @@ def apply_theme(app, theme_name, save_to_settings=True):
             sttg = Settings.get_or_none(Settings.id == 1)
             if sttg is None:
                 sttg = Settings.init_settings()
-            sttg.theme = theme_name
+            sttg.theme = normalized
             sttg.save()
-            logger.info("Thème enregistré dans Settings: %s", theme_name)
+            logger.info("Thème enregistré dans Settings: %s", normalized)
         except Exception as exc:
             logger.warning("Enregistrement du thème impossible: %s", exc)
+
+    _restore_font_scale_qss(app)
     return True
 
 

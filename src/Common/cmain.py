@@ -280,34 +280,24 @@ def cmain(test=False):
 
         setup_localization()
 
-        # Appliquer le thème déjà enregistré (sinon il n'est jamais relu au prochain lancement)
+        # Appliquer le thème déjà enregistré (« default » / vide → système ; déféré dans theme.apply_theme)
         try:
-            from .ui.theme import THEME_LIGHT, THEME_NAMES, apply_theme
+            from .ui.theme import THEME_NAMES, THEME_SYSTEM, apply_theme, attach_system_theme_listener
 
             if dbh is not None and dbh.is_closed():
                 dbh.connect()
             _st = Settings.init_settings()
-            _t = getattr(_st, "theme", None) or THEME_LIGHT
-            if isinstance(_t, str):
-                _t = _t.strip().lower()
-            if _t in ("", "default"):
-                _t = THEME_LIGHT
-            elif _t not in THEME_NAMES:
-                _t = THEME_LIGHT
+            _t_raw = getattr(_st, "theme", "") or ""
+            if isinstance(_t_raw, str):
+                _t = _t_raw.strip().lower()
+            else:
+                _t = str(_t_raw).strip().lower()
+            if _t not in THEME_NAMES:
+                _t = THEME_SYSTEM
             apply_theme(app, _t, save_to_settings=False)
+            attach_system_theme_listener(app)
         except Exception as e:
             logger.warning("Thème au démarrage ignoré: %s", e)
-
-        # Appliquer la taille de police enregistrée (accessibilité)
-        try:
-            from .ui.theme import apply_font_scale
-
-            if dbh is not None and dbh.is_closed():
-                dbh.connect()
-            _st = Settings.init_settings()
-            apply_font_scale(app, getattr(_st, "font_scale", 1.0) or 1.0, save_to_settings=False)
-        except Exception as e:
-            logger.warning("Taille police au démarrage ignorée: %s", e)
 
         # Tentative d'initialisation de la fenêtre principale
         window = None

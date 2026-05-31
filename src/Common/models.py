@@ -628,7 +628,7 @@ class Settings(BaseModel):
     toolbar = peewee.BooleanField(default=True)
     toolbar_position = peewee.CharField(choices=POSITION, default=LEFT)
     url = peewee.CharField(default="http://file-repo.ml")
-    theme = peewee.CharField(default="default")
+    theme = peewee.CharField(default="system")
     devise = peewee.CharField(choices=DEVISE, default=XOF)
     # Échelle de police globale (1.0 = défaut). Utilisée pour l'accessibilité.
     font_scale = peewee.FloatField(default=1.0)
@@ -682,7 +682,7 @@ class Settings(BaseModel):
                     toolbar=True,
                     toolbar_position=cls.LEFT,
                     url="http://file-repo.ml",
-                    theme="default",
+                    theme="system",
                     devise=cls.XOF,
                     font_scale=1.0,
                 )
