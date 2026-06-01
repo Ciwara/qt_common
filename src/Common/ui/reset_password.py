@@ -116,7 +116,6 @@ class ResetPasswordWidget(FDialog, FWidget):
         formbox.setHorizontalSpacing(10)
 
         self.box_username = QComboBox()
-        self.box_username.setMinimumHeight(40)
 
         formbox.addRow(FormLabel("Utilisateur"), self.box_username)
 

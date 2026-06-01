@@ -197,38 +197,36 @@ def raise_success(title, message):
     box.exec()
 
 
-def formatted_number(number, sep=".", aftergam=None):
-    """Format a number according to locale settings and custom precision."""
+def formatted_number(number, sep=" ", aftergam=None):
+    """Format a number with a stable thousands separator.
 
-    from Common.models import Settings
+    Locale grouping is not reliable on every desktop install; use Python's
+    grouping and replace the separator so tables always show readable amounts.
+    """
+
+    if isinstance(number, bool):
+        return str(number)
 
     if aftergam is None:
-        aftergam = int(Settings.select().get().after_cam)
+        try:
+            from Common.models import Settings
+
+            aftergam = int(Settings.select().get().after_cam)
+        except Exception:
+            aftergam = 0
     else:
         aftergam = int(aftergam)
     if aftergam < 0:
         aftergam = 0
 
-    # Set the locale to the desired locale
-    # locale.setlocale(locale.LC_ALL, "fra") # Uncomment if you need to set a specific locale
-
-    locale_name, encoding = locale.getlocale()
-
-    # Determine the format based on the type of number
-    if isinstance(number, int):
-        fmt = "%d"
-    elif isinstance(number, float):
-        fmt = f"%.{aftergam}f"
-    else:
-        return str(number)  # Return as string if the type is not supported
-
     try:
-        # Format the number using locale settings
-        formatted = locale.format_string(fmt, number, grouping=True)
-        return formatted
+        if isinstance(number, int):
+            return f"{number:,}".replace(",", sep)
+        if isinstance(number, float):
+            return f"{number:,.{aftergam}f}".replace(",", sep)
     except Exception as e:
         logger.debug("formatted_number : %s", e)
-        return str(number)
+    return str(number)
 
 
 def format_number_table_no_round(number):

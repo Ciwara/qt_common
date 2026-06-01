@@ -435,29 +435,6 @@ class LoginWidget(FDialog, FWidget):
 
         self.box_username = QComboBox()
         self.box_username.setToolTip("Compte utilisateur")
-        self.box_username.setMinimumHeight(44)
-        self.box_username.setStyleSheet(
-            """
-            QComboBox {
-                padding: 10px 14px;
-                border: 1px solid palette(midlight);
-                border-radius: 8px;
-                font-size: 14px;
-                background-color: palette(base);
-                color: palette(text);
-            }
-            QComboBox:hover { border-color: palette(highlight); }
-            QComboBox:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
-            QComboBox::drop-down { border: none; width: 28px; }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid palette(text);
-                margin-right: 8px;
-            }
-            """
-        )
 
         for index in self.liste_username:
             badge = "Admin" if index.group == Owner.ADMIN else "Utilisateur"
@@ -470,22 +447,7 @@ class LoginWidget(FDialog, FWidget):
         self.password_field.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_field.setPlaceholderText("Mot de passe")
         self.password_field.setToolTip("Mot de passe du compte sélectionné")
-        self.password_field.setMinimumHeight(44)
         self.password_field.setAccessibleName("Mot de passe")
-        self.password_field.setStyleSheet(
-            """
-            QLineEdit {
-                padding: 10px 14px;
-                border: 1px solid palette(midlight);
-                border-radius: 8px;
-                font-size: 14px;
-                background-color: palette(base);
-                color: palette(text);
-            }
-            QLineEdit:hover { border-color: palette(highlight); }
-            QLineEdit:focus { border: 2px solid palette(highlight); padding: 9px 13px; }
-            """
-        )
         self.password_field.returnPressed.connect(self.login)
         self.password_field.installEventFilter(self)
 
@@ -525,32 +487,13 @@ class LoginWidget(FDialog, FWidget):
         buttons_layout.setSpacing(10)
 
         self.login_button = QPushButton("Se connecter")
+        self.login_button.setObjectName("primaryButton")
         self.login_button.setIcon(
             QIcon.fromTheme("unlock", QIcon(f"{CConstants.img_cmedia}login.png"))
         )
         self.login_button.setToolTip("Valider (Entrée)")
-        self.login_button.setMinimumHeight(48)
         self.login_button.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self.login_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: palette(highlight);
-                color: palette(highlighted-text);
-                border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                font-weight: 600;
-                font-size: 14px;
-            }
-            QPushButton:hover { background-color: palette(highlight); }
-            QPushButton:pressed { padding-top: 13px; padding-bottom: 11px; }
-            QPushButton:disabled {
-                background-color: palette(mid);
-                color: palette(placeholder-text);
-            }
-            """
         )
         self.login_button.clicked.connect(self.login)
         self.login_button.setDefault(True)
@@ -558,25 +501,6 @@ class LoginWidget(FDialog, FWidget):
 
         self.cancel_button = QPushButton("Quitter")
         self.cancel_button.setToolTip("Fermer l’application (Échap)")
-        self.cancel_button.setMinimumHeight(48)
-        self.cancel_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: palette(button);
-                color: palette(button-text);
-                border: 1px solid palette(midlight);
-                border-radius: 8px;
-                padding: 10px 16px;
-                font-weight: 500;
-                font-size: 13px;
-            }
-            QPushButton:hover { background-color: palette(midlight); }
-            QPushButton:disabled {
-                background-color: palette(alternate-base);
-                color: palette(placeholder-text);
-            }
-            """
-        )
         self.cancel_button.clicked.connect(self.cancel)
 
         if self.hibernate:
@@ -587,19 +511,8 @@ class LoginWidget(FDialog, FWidget):
         formbox.addRow(FormLabel(""), buttons_layout)
 
         self.reset_button = Button("Mot de passe oublié ?")
+        self.reset_button.setObjectName("linkButton")
         self.reset_button.setToolTip("Réinitialisation du mot de passe")
-        self.reset_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                color: palette(link);
-                border: none;
-                padding: 6px;
-                font-size: 12px;
-            }
-            QPushButton:hover { text-decoration: underline; }
-            """
-        )
         self.reset_button.clicked.connect(self.show_reset_dialog)
         reset_layout = QHBoxLayout()
         reset_layout.addStretch()

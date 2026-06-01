@@ -470,28 +470,17 @@ class BttRond(Button):
 class DeletedBtt(Button):
     def __init__(self, *args, **kwargs):
         super(DeletedBtt, self).__init__(*args, **kwargs)
+        self.setObjectName("dangerButton")
         self.setIcon(QIcon.fromTheme("edit-delete", QIcon("")))
         
         # Amélioration de l'accessibilité avec avertissement
         self.setToolTip("🗑️ Supprimer définitivement - Action irréversible")
-        
-        css = """
-                background-color:#dc3545;
-                border-radius:8px;
-                border:1px solid #c82333;
-                color:#ffffff;
-                font-family:arial;
-                font-size:15px;
-                font-weight:bold;
-                padding:8px 24px;
-                text-decoration:none;
-                """
-        self.setStyleSheet(css)
 
 
 class WarningBtt(Button):
     def __init__(self, *args, **kwargs):
         super(WarningBtt, self).__init__(*args, **kwargs)
+        self.setObjectName("warningButton")
         self.setIcon(
             QIcon.fromTheme(
                 "save",
@@ -505,18 +494,6 @@ class WarningBtt(Button):
         
         # Amélioration de l'accessibilité
         self.setToolTip("⚠️ Attention - Action nécessitant une vigilance particulière")
-        
-        css = """
-                    background-color:#ffc107;
-                    border-radius:8px;
-                    border:1px solid #e0a800;
-                    color:#000000;
-                    font-family:arial;
-                    font-size:15px;
-                    font-weight:bold;
-                    padding:8px 24px;
-                    """
-        self.setStyleSheet(css)
 
 
 class ButtonSave(Button):
@@ -564,6 +541,7 @@ class Button_menu(Button):
 class BttSmall(Button):
     def __init__(self, *args, **kwargs):
         super(BttSmall, self).__init__(*args, **kwargs)
+        self.setObjectName("compactButton")
         chart_count = len(self.text())
         # print(chart_count)
         self.setFixedWidth(chart_count + 45)
@@ -864,8 +842,6 @@ class ModernButton(QPushButton):
             
     def _setup_button(self):
         """Configuration du bouton moderne"""
-        self.setMinimumHeight(40)
-        self.setMinimumWidth(100)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Ombre moderne
@@ -960,8 +936,6 @@ class ModernLineEdit(QLineEdit):
         """Configuration du champ de saisie"""
         if placeholder:
             self.setPlaceholderText(placeholder)
-            
-        self.setMinimumHeight(45)
         
     def _setup_animations(self):
         """Configuration des animations"""

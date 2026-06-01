@@ -331,6 +331,9 @@ class FTableWidget(QTableWidget):
     data = property(**data())
 
     def _item_for_data(self, row, column, data, context=None):
+        align = str(self.align_map.get(column, "")).lower()
+        if isinstance(data, basestring) and align == "r":
+            data = self._format_numeric_string(data)
         if isinstance(data, (basestring, int, float)):
             if column in self.align_map.keys():
                 widget = self.widget_from_align(self.align_map[column])
@@ -343,6 +346,29 @@ class FTableWidget(QTableWidget):
     def _item_for_data_(self, row, column, data, context=None):
         """returns QTableWidgetItem or QWidget to add to a cell"""
         return QTableWidgetItem(self._format_for_table(data))
+
+    def _format_numeric_string(self, value):
+        text = str(value).strip()
+        if not text:
+            return value
+
+        sign = ""
+        if text.startswith("-"):
+            sign = "-"
+            text = text[1:]
+
+        compact = text.replace(" ", "")
+        if compact.isdigit():
+            return formatted_number(int(sign + compact))
+
+        if "." in compact:
+            groups = compact.split(".")
+            if groups and groups[0].isdigit() and all(
+                len(group) == 3 and group.isdigit() for group in groups[1:]
+            ):
+                return formatted_number(int(sign + "".join(groups)))
+
+        return value
 
     def widget_from_align(self, align):
         if align.lower() == "l":
@@ -424,6 +450,16 @@ class FlexibleWidget(QTableWidgetItem):
 
     def live_refresh(self):
         pass
+
+    def replace(self, old, new):
+        try:
+            txt = self.text()
+        except Exception:
+            try:
+                txt = self.toPlainText()
+            except Exception:
+                txt = str(self)
+        return str(txt).replace(old, new)
 
 
 class TotalsWidget(QTableWidgetItem):

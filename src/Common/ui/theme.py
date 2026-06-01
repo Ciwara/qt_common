@@ -15,8 +15,68 @@ THEME_SYSTEM = "system"
 
 THEME_NAMES = (THEME_LIGHT, THEME_DARK, THEME_SYSTEM)
 
+# Dimensions UI uniformes (source unique pour boutons, champs, etc.)
+UI_CONTROL_MIN_HEIGHT = 36
+UI_BUTTON_MIN_WIDTH = 88
+UI_BUTTON_PADDING = "8px 16px"
+UI_INPUT_PADDING = "8px 12px"
+
 # Valeurs historiques / vides → suivre le système par défaut
 _THEME_ALIASES_SYSTEM = frozenset(("", "default"))
+
+# Variantes sémantiques (couleurs / comportement), tailles héritées du thème global
+SEMANTIC_CONTROLS_STYLESHEET = """
+    QPushButton#primaryButton, QCommandLinkButton#primaryButton {
+        background-color: palette(highlight);
+        color: palette(highlighted-text);
+        border: none;
+        font-weight: 600;
+    }
+    QPushButton#primaryButton:hover, QCommandLinkButton#primaryButton:hover {
+        background-color: palette(highlight);
+    }
+    QPushButton#primaryButton:disabled, QCommandLinkButton#primaryButton:disabled {
+        background-color: palette(mid);
+        color: palette(placeholder-text);
+    }
+
+    QPushButton#dangerButton, QCommandLinkButton#dangerButton {
+        background-color: #dc3545;
+        color: #ffffff;
+        border: 1px solid #c82333;
+        font-weight: 600;
+    }
+    QPushButton#dangerButton:hover, QCommandLinkButton#dangerButton:hover {
+        background-color: #c82333;
+    }
+
+    QPushButton#warningButton, QCommandLinkButton#warningButton {
+        background-color: #ffc107;
+        color: #1f2329;
+        border: 1px solid #e0a800;
+        font-weight: 600;
+    }
+    QPushButton#warningButton:hover, QCommandLinkButton#warningButton:hover {
+        background-color: #e0a800;
+    }
+
+    QPushButton#linkButton, QCommandLinkButton#linkButton {
+        min-height: 0px;
+        min-width: 0px;
+        padding: 4px 8px;
+        background-color: transparent;
+        color: palette(link);
+        border: none;
+        font-weight: normal;
+    }
+    QPushButton#linkButton:hover, QCommandLinkButton#linkButton:hover {
+        text-decoration: underline;
+    }
+
+    QPushButton#compactButton, QCommandLinkButton#compactButton {
+        min-width: 0px;
+    }
+"""
 
 
 def _system_prefers_dark():
@@ -116,6 +176,8 @@ THEME_DARK_STYLESHEET = """
         border: 1px solid transparent;
         border-radius: 8px;
         padding: 6px 8px;
+        min-height: 36px;
+        min-width: 36px;
     }
     QToolButton:hover {
         background-color: #3a3a3a;
@@ -165,29 +227,33 @@ THEME_DARK_STYLESHEET = """
         color: #ffffff;
         border: 1px solid #4f4f4f;
         border-radius: 8px;
-        padding: 8px 10px;
+        padding: 8px 12px;
+        min-height: 36px;
     }
     QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateTimeEdit:hover, QComboBox:hover {
         border-color: #6a6a6a;
     }
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {
         border: 2px solid #2d7bdc;
-        padding: 7px 9px;
+        padding: 7px 11px;
     }
     QComboBox::drop-down { border: none; width: 28px; }
     QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #ffffff; margin-right: 8px; }
 
     /* Buttons */
-    QPushButton {
+    QPushButton, QCommandLinkButton {
         background-color: #3a3a3a;
         color: #ffffff;
         border: 1px solid #555555;
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 8px 16px;
+        min-height: 36px;
+        min-width: 88px;
+        text-decoration: none;
     }
-    QPushButton:hover { background-color: #454545; }
-    QPushButton:pressed { background-color: #4f4f4f; }
-    QPushButton:disabled {
+    QPushButton:hover, QCommandLinkButton:hover { background-color: #454545; }
+    QPushButton:pressed, QCommandLinkButton:pressed { background-color: #4f4f4f; }
+    QPushButton:disabled, QCommandLinkButton:disabled {
         background-color: #2f2f2f;
         color: #a0a0a0;
         border-color: #3d3d3d;
@@ -273,6 +339,8 @@ THEME_LIGHT_STYLESHEET = """
         border: 1px solid transparent;
         border-radius: 8px;
         padding: 6px 8px;
+        min-height: 36px;
+        min-width: 36px;
     }
     QToolButton:hover {
         background-color: #eef2f7;
@@ -322,14 +390,15 @@ THEME_LIGHT_STYLESHEET = """
         color: #1f2329;
         border: 1px solid #cdd4dd;
         border-radius: 8px;
-        padding: 8px 10px;
+        padding: 8px 12px;
+        min-height: 36px;
     }
     QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateTimeEdit:hover, QComboBox:hover {
         border-color: #aab4c0;
     }
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {
         border: 2px solid #2d7bdc;
-        padding: 7px 9px;
+        padding: 7px 11px;
     }
     QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateTimeEdit:disabled, QComboBox:disabled {
         background-color: #f0f2f5;
@@ -340,16 +409,19 @@ THEME_LIGHT_STYLESHEET = """
     QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #5a6470; margin-right: 8px; }
 
     /* Buttons */
-    QPushButton {
+    QPushButton, QCommandLinkButton {
         background-color: #ffffff;
         color: #1f2329;
         border: 1px solid #cdd4dd;
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 8px 16px;
+        min-height: 36px;
+        min-width: 88px;
+        text-decoration: none;
     }
-    QPushButton:hover { background-color: #eef2f7; border-color: #aab4c0; }
-    QPushButton:pressed { background-color: #e1e8f1; }
-    QPushButton:disabled {
+    QPushButton:hover, QCommandLinkButton:hover { background-color: #eef2f7; border-color: #aab4c0; }
+    QPushButton:pressed, QCommandLinkButton:pressed { background-color: #e1e8f1; }
+    QPushButton:disabled, QCommandLinkButton:disabled {
         background-color: #f0f2f5;
         color: #9aa3af;
         border-color: #e3e7ec;
@@ -547,8 +619,8 @@ def get_stylesheet(theme_name):
         str: Stylesheet à appliquer (thème clair ou sombre selon le cas).
     """
     if theme_name == THEME_DARK:
-        return THEME_DARK_STYLESHEET
-    return THEME_LIGHT_STYLESHEET
+        return THEME_DARK_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
+    return THEME_LIGHT_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
 
 
 def apply_theme(app, theme_name, save_to_settings=True):
