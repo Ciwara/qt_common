@@ -23,7 +23,8 @@ def _resolve_db_file(name="database.db"):
     """Chemin SQLite absolu : même dossier que le script lancé (pas le CWD).
 
     Évite plusieurs `database.db` selon le répertoire de travail — la table
-    `License` et les fichiers LICENCE / `.common_device_node` restent alignés.
+    `License` reste à côté de l'application. L'identifiant machine et la copie
+    de licence sont aussi dans le profil utilisateur (survivent à une réinstallation).
     Surcharge possible : variable d'environnement COMMON_DB_PATH.
     """
     forced = (os.environ.get("COMMON_DB_PATH") or "").strip()
@@ -268,22 +269,9 @@ class Owner(BaseModel):
 
     @staticmethod
     def validate_password(password):
-        """Valide la force du mot de passe selon des critères de sécurité"""
-        if len(password) < 8:
-            return False, "Le mot de passe doit contenir au moins 8 caractères"
-        
-        if not re.search(r"[A-Z]", password):
-            return False, "Le mot de passe doit contenir au moins une majuscule"
-            
-        if not re.search(r"[a-z]", password):
-            return False, "Le mot de passe doit contenir au moins une minuscule"
-            
-        if not re.search(r"\d", password):
-            return False, "Le mot de passe doit contenir au moins un chiffre"
-            
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
-            return False, "Le mot de passe doit contenir au moins un caractère spécial"
-            
+        """Valide le mot de passe (non vide uniquement, sans contrainte de complexité)."""
+        if password is None or not str(password).strip():
+            return False, "Le mot de passe ne peut pas être vide"
         return True, "Mot de passe valide"
 
     def save(self):
@@ -359,28 +347,24 @@ class Owner(BaseModel):
         remaining = self.LOCKOUT_DURATION - elapsed
         return max(0, remaining)
 
-    def generate_reset_token(self):
-        """Génère un token de réinitialisation de mot de passe"""
+    def generate_reset_token(self, digits=6):
+        """Génère un code de réinitialisation (chiffres, défaut 6) valable 1 heure."""
         import secrets
-        import string
-        
-        # Générer un token aléatoire de 32 caractères
-        alphabet = string.ascii_letters + string.digits
-        token = ''.join(secrets.choice(alphabet) for _ in range(32))
-        
-        # Stocker le token et sa date d'expiration (1 heure)
+
+        n = max(4, min(int(digits or 6), 8))
+        # Code numérique lisible (évite les longs tokens pour une appli desktop)
+        token = "".join(str(secrets.randbelow(10)) for _ in range(n))
+
         self.reset_token = token
         self.reset_token_expiry = datetime.now() + timedelta(hours=1)
         self.save()
-        
         return token
 
     def verify_reset_token(self, token):
         """
-        Vérifie si le token correspond et n'est pas expiré.
-        Ne consomme pas le token : l'invalidation se fait dans reset_password
-        après validation du nouveau mot de passe (évite de perdre le code si
-        le mot de passe ne respecte pas les règles).
+        Vérifie si le code correspond et n'est pas expiré.
+        Ne consomme pas le code : l'invalidation se fait dans reset_password
+        après validation du nouveau mot de passe.
         """
         if not self.reset_token or not self.reset_token_expiry:
             return False
@@ -391,8 +375,15 @@ class Owner(BaseModel):
             and datetime.now() < self.reset_token_expiry
         )
 
+    def reset_token_remaining_minutes(self):
+        """Minutes restantes avant expiration du code (0 si absent/expiré)."""
+        if not self.reset_token_expiry:
+            return 0
+        remaining = (self.reset_token_expiry - datetime.now()).total_seconds()
+        return max(0, int(remaining // 60))
+
     def reset_password(self, new_password):
-        """Réinitialise le mot de passe après validation (règles + token déjà vérifié)."""
+        """Réinitialise le mot de passe après validation (règles + code déjà vérifié)."""
         is_valid, message = self.validate_password(new_password)
         if not is_valid:
             return False, message
@@ -400,9 +391,9 @@ class Owner(BaseModel):
         self.password = self.crypt_password(new_password)
         self.reset_token = None
         self.reset_token_expiry = None
-        # Déblocage connexion + une seule sauvegarde
-        self.reset_login_attempts()
-
+        self.login_attempts = 0
+        self.last_attempt = None
+        self.save()
         return True, "Mot de passe réinitialisé avec succès"
 
 
@@ -414,6 +405,7 @@ class Organization(BaseModel):
     email_org = peewee.CharField(null=True, verbose_name="")
     adress_org = peewee.TextField(null=True, verbose_name="")
     slug = peewee.CharField(null=True)
+    uuid = peewee.CharField(max_length=36, null=True, unique=True)
 
     def __str__(self):
         return self.display_name()
@@ -429,9 +421,25 @@ class Organization(BaseModel):
             ctct = cls.create(name_orga=name_orga, type_=typ)
         return ctct
 
+    def ensure_uuid(self):
+        if not self.uuid:
+            import uuid as uuid_mod
+
+            self.uuid = str(uuid_mod.uuid4())
+            self.save()
+        return self.uuid
+
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            import uuid as uuid_mod
+
+            self.uuid = str(uuid_mod.uuid4())
+        return super().save(*args, **kwargs)
+
     def data(self):
         return {
             "logo_orga": self.logo_orga,
+            "uuid": self.uuid,
             "slug": self.slug,
             "name_orga": self.name_orga,
             "phone": self.phone,
@@ -506,7 +514,9 @@ class License(BaseModel):
         self.save()
 
     def remove_activation(self):
+        self.isactivated = False
         self.can_expired = True
+        self.evaluation = False
         self.expiration_date = datetime.now() - timedelta(days=1)
         self.save()
 
@@ -774,12 +784,27 @@ def init_default_version():
         logger.error(f"Erreur lors de la création de la version par défaut: {e}")
         return False
 
+def _table_has_column(table, column):
+    try:
+        if dbh is None:
+            return False
+        rows = dbh.execute_sql("PRAGMA table_info({})".format(table)).fetchall()
+        return any(row[1] == column for row in rows)
+    except Exception:
+        return False
+
+
 def init_default_organization():
     """Initialise une organisation par défaut avec id=1 si nécessaire"""
     try:
-        # Vérifier si un enregistrement Organization avec id=1 existe
-        org_exists = Organization.get_or_none(Organization.id == 1)
-        
+        has_uuid = _table_has_column("organization", "uuid")
+        # Ne pas SELECT * tant que la migration uuid n'a pas tourné.
+        org_exists = (
+            Organization.select(Organization.id, Organization.name_orga)
+            .where(Organization.id == 1)
+            .first()
+        )
+
         if org_exists is None:
             logger.info("Création de l'organisation par défaut avec id=1")
             
@@ -789,25 +814,38 @@ def init_default_organization():
                 if dbh is None:
                     logger.error("dbh n'est pas initialisé")
                     raise Exception("Base de données non initialisée")
-                    
-                query = """
-                INSERT OR REPLACE INTO organization 
-                (id, is_syncro, last_update_date, logo_orga, name_orga, phone, bp, email_org, adress_org, slug)
-                VALUES (1, 0, datetime('now'), NULL, ?, 0, ?, ?, ?, ?)
-                """
-                dbh.execute_sql(query, [
-                    "Organisation par défaut",
-                    "BP 000", 
-                    "contact@example.com",
-                    "Adresse par défaut",
-                    "default-org"
-                ])
+
+                if has_uuid:
+                    import uuid as uuid_mod
+
+                    query = """
+                    INSERT OR REPLACE INTO organization
+                    (id, is_syncro, last_update_date, logo_orga, name_orga, phone, bp, email_org, adress_org, slug, uuid)
+                    VALUES (1, 0, datetime('now'), NULL, ?, 0, ?, ?, ?, ?, ?)
+                    """
+                    params = [
+                        "Organisation par défaut",
+                        "BP 000",
+                        "contact@example.com",
+                        "Adresse par défaut",
+                        "default-org",
+                        str(uuid_mod.uuid4()),
+                    ]
+                else:
+                    query = """
+                    INSERT OR REPLACE INTO organization
+                    (id, is_syncro, last_update_date, logo_orga, name_orga, phone, bp, email_org, adress_org, slug)
+                    VALUES (1, 0, datetime('now'), NULL, ?, 0, ?, ?, ?, ?)
+                    """
+                    params = [
+                        "Organisation par défaut",
+                        "BP 000",
+                        "contact@example.com",
+                        "Adresse par défaut",
+                        "default-org",
+                    ]
+                dbh.execute_sql(query, params)
                 logger.info("✅ Organisation par défaut créée avec succès (id=1)")
-                
-                # Vérifier la création
-                org = Organization.get(id=1)
-                logger.debug(f"Vérification création réussie - organisation: {org.name_orga}")
-                
                 return True
                 
             except Exception as e:
@@ -830,6 +868,13 @@ def init_default_organization():
                     return False
         else:
             logger.debug(f"Une organisation avec id=1 existe déjà: {org_exists.name_orga}")
+            if has_uuid:
+                try:
+                    org = Organization.get(Organization.id == 1)
+                    if not org.uuid:
+                        org.ensure_uuid()
+                except Exception as e:
+                    logger.debug("UUID organisation non renseigné encore: %s", e)
             return False
             
     except Exception as e:

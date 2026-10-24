@@ -6,6 +6,7 @@
 import errno
 import os
 import platform
+import re
 import shutil
 import sqlite3
 from datetime import datetime
@@ -209,226 +210,140 @@ def get_database_info(db_path):
     return info
 
 
-def import_backup(folder=None, dst_folder=None):
-    """
-    Importe une sauvegarde de base de données avec validation et vérification d'intégrité.
-    
-    Args:
-        folder: Dossier source (non utilisé actuellement)
-        dst_folder: Dossier de destination (non utilisé actuellement)
-    """
+def _resolve_db_path():
+    """Chemin absolu de la base active."""
+    return DB_FILE if os.path.isabs(DB_FILE) else os.path.abspath(DB_FILE)
+
+
+def _apply_app_schema_after_import():
+    """Migrations métier (activités, colonnes…) après remplacement de la base."""
     try:
-        # Déterminer le chemin absolu du fichier de base de données actuel
-        # Utiliser DB_FILE directement qui devrait être un chemin absolu ou relatif
-        if os.path.isabs(DB_FILE):
-            path_db_file = DB_FILE
-        else:
-            # Si c'est un chemin relatif, le résoudre depuis le répertoire de travail
-            path_db_file = os.path.abspath(DB_FILE)
-        
-        logger.info(f"Import de la base de données - Fichier actuel: {path_db_file}")
-        
-        # Vérifier que le fichier de base de données actuel existe
-        if not os.path.exists(path_db_file):
-            logger.warning(f"Le fichier de base de données actuel n'existe pas: {path_db_file}")
-            # Créer le répertoire parent si nécessaire
-            os.makedirs(os.path.dirname(path_db_file), exist_ok=True)
-        
-        # Ouvrir le dialogue de sélection de fichier
-        file_dialog = QFileDialog()
-        name_select_f, _ = file_dialog.getOpenFileName(
-            QWidget(), 
-            "📂 Sélectionner le fichier de sauvegarde à importer", 
-            "", 
-            "Fichiers de base de données (*.db);;Tous les fichiers (*)"
-        )
+        import database as app_db
 
-        # Si l'utilisateur n'a pas sélectionné de fichier
-        if not name_select_f:
-            logger.info("Import annulé - aucun fichier sélectionné")
-            return
+        setup_cls = getattr(app_db, "Setup", None)
+        if setup_cls is not None:
+            setup_cls().create_all_or_pass()
+            logger.info("Schéma métier appliqué après import (→ activité Principale)")
+    except Exception as e:
+        logger.warning("Schéma métier non appliqué après import: %s", e)
 
-        logger.info(f"Fichier sélectionné pour l'import: {name_select_f}")
-        
-        # Valider le fichier sélectionné
-        is_valid, integrity_check, error_msg = validate_sqlite_database(name_select_f)
-        
+
+def import_backup(folder=None, dst_folder=None, file_path=None, parent=None, confirm=True):
+    """
+    Importe une ancienne base SQLite locale (fichier .db).
+
+    Args:
+        file_path: chemin déjà choisi (sinon dialogue de sélection).
+        parent: widget parent pour les dialogues.
+        confirm: demander confirmation avant remplacement.
+    Returns:
+        True si import réussi, False sinon.
+    """
+    parent = parent or QWidget()
+    path_db_file = _resolve_db_path()
+    parent_dir = os.path.dirname(path_db_file) or "."
+
+    try:
+        os.makedirs(parent_dir, exist_ok=True)
+
+        # 1) Choisir le fichier (sauf si déjà fourni)
+        if not file_path:
+            start_dir = folder if folder and os.path.isdir(folder) else parent_dir
+            file_path, _ = QFileDialog.getOpenFileName(
+                parent,
+                "Importer une base de données",
+                start_dir,
+                "Base de données (*.db);;Tous les fichiers (*)",
+            )
+        if not file_path:
+            return False
+
+        if not os.path.isfile(file_path):
+            raise_error("Fichier introuvable", f"Le fichier n'existe pas :\n{file_path}")
+            return False
+
+        # 2) Valider rapidement
+        is_valid, _, error_msg = validate_sqlite_database(file_path)
         if not is_valid:
             raise_error(
-                "❌ Fichier de base de données invalide",
-                f"Le fichier sélectionné n'est pas une base de données SQLite valide.\n\n"
-                f"Erreur: {error_msg}\n\n"
-                f"Veuillez sélectionner un fichier de sauvegarde valide."
+                "Fichier invalide",
+                f"Ce fichier n'est pas une base SQLite utilisable.\n{error_msg or ''}",
             )
-            return
-        
-        logger.info(f"Validation réussie - Intégrité: {integrity_check}")
-        
-        # Récupérer les informations sur la base de données à importer
-        db_info = get_database_info(name_select_f)
-        
-        # Récupérer les informations sur la base de données actuelle (si elle existe)
-        current_db_info = None
-        if os.path.exists(path_db_file):
-            current_db_info = get_database_info(path_db_file)
-        
-        # Préparer le message de confirmation avec les informations
-        confirm_message = f"📊 Informations sur la sauvegarde à importer:\n\n"
-        confirm_message += f"📁 Fichier: {os.path.basename(name_select_f)}\n"
-        confirm_message += f"💾 Taille: {db_info['size_mb']} MB\n"
-        if db_info['modified']:
-            confirm_message += f"📅 Date de modification: {db_info['modified'].strftime('%d/%m/%Y %H:%M:%S')}\n"
-        confirm_message += f"📋 Nombre de tables: {db_info['tables_count']}\n"
-        if db_info['version']:
-            confirm_message += f"🔖 Version: {db_info['version']}\n"
-        if db_info['organization']:
-            confirm_message += f"🏢 Organisation: {db_info['organization']}\n"
-        
-        if current_db_info:
-            confirm_message += f"\n⚠️ ATTENTION:\n"
-            confirm_message += f"• La base de données actuelle sera remplacée\n"
-            confirm_message += f"• Une sauvegarde sera créée avant l'import\n"
-            confirm_message += f"• Cette action ne peut pas être annulée\n"
-        else:
-            confirm_message += f"\n⚠️ ATTENTION:\n"
-            confirm_message += f"• Une nouvelle base de données sera créée\n"
-            confirm_message += f"• Cette action ne peut pas être annulée\n"
-        
-        confirm_message += f"\n💡 Voulez-vous continuer avec l'import ?"
-        
-        # Demander confirmation à l'utilisateur
-        reply = QMessageBox.question(
-            QWidget(),
-            "💾 Confirmer l'import de la base de données",
-            confirm_message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply != QMessageBox.StandardButton.Yes:
-            logger.info("Import annulé par l'utilisateur")
-            return
-        
-        # Fermer la connexion à la base de données actuelle si elle est ouverte
+            return False
+
+        # 3) Confirmation courte
+        if confirm:
+            reply = QMessageBox.question(
+                parent,
+                "Importer la base",
+                f"Remplacer la base actuelle par :\n« {os.path.basename(file_path)} » ?\n\n"
+                "Une sauvegarde de la base actuelle sera créée.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
+
+        # 4) Fermer la connexion
         if dbh is not None and not dbh.is_closed():
-            logger.info("Fermeture de la connexion à la base de données actuelle")
             try:
                 dbh.close()
             except Exception as e:
-                logger.warning(f"Erreur lors de la fermeture de la base de données: {e}")
-        
-        # Créer une sauvegarde de la base de données actuelle (si elle existe)
-        backup_file_path = None
-        if os.path.exists(path_db_file):
-            try:
-                backup_file_name = "Avant-{}-{}.db".format(
-                    os.path.basename(DB_FILE).replace('.db', ''), 
-                    DATETIME
-                )
-                backup_dir = os.path.dirname(path_db_file)
-                backup_file_path = os.path.join(backup_dir, backup_file_name)
-                
-                logger.info(f"Création d'une sauvegarde: {backup_file_path}")
-                shutil.copy2(path_db_file, backup_file_path)
-                logger.info("✅ Sauvegarde créée avec succès")
-            except Exception as e:
-                logger.error(f"Erreur lors de la création de la sauvegarde: {e}")
-                raise_error(
-                    "❌ Erreur de sauvegarde",
-                    f"Impossible de créer une sauvegarde de la base de données actuelle.\n\n"
-                    f"Erreur: {str(e)}\n\n"
-                    f"L'import a été annulé pour éviter la perte de données."
-                )
-                return
-        
-        # Copier le fichier sélectionné vers la base de données actuelle
-        try:
-            logger.info(f"Copie du fichier de sauvegarde vers: {path_db_file}")
-            # Créer le répertoire parent si nécessaire
-            os.makedirs(os.path.dirname(path_db_file), exist_ok=True)
-            shutil.copy2(name_select_f, path_db_file)
-            logger.info("✅ Fichier copié avec succès")
-        except Exception as e:
-            logger.error(f"Erreur lors de la copie du fichier: {e}")
-            
-            # Essayer de restaurer la sauvegarde si elle existe
-            if backup_file_path and os.path.exists(backup_file_path):
-                try:
-                    logger.warning("Tentative de restauration de la sauvegarde")
-                    shutil.copy2(backup_file_path, path_db_file)
-                except:
-                    pass
-            
-            raise_error(
-                "❌ Erreur lors de l'import",
-                f"Une erreur s'est produite lors de la copie du fichier.\n\n"
-                f"Erreur: {str(e)}\n\n"
-                f"Vérifiez que:\n"
-                f"• Vous avez les droits d'écriture\n"
-                f"• Il y a suffisamment d'espace disque\n"
-                f"• Le fichier n'est pas utilisé par une autre application"
-            )
-            return
-        
-        # Réinitialiser la connexion à la base de données
-        try:
-            logger.info("Réinitialisation de la connexion à la base de données")
-            # Réinitialiser la variable globale dbh
-            init_database()
-            logger.info("✅ Base de données réinitialisée")
-        except Exception as e:
-            logger.error(f"Erreur lors de la réinitialisation de la base de données: {e}")
-            raise_error(
-                "⚠️ Import réussi mais erreur de réinitialisation",
-                f"Le fichier a été importé avec succès, mais une erreur s'est produite lors de la réinitialisation.\n\n"
-                f"Erreur: {str(e)}\n\n"
-                f"Veuillez redémarrer l'application."
-            )
-            return
-        
-        # Récupérer la version de la base de données importée
-        try:
-            version_info = Version.get(id=1).display_name()
-        except Exception as e:
-            logger.warning(f"Impossible de récupérer la version: {e}")
-            version_info = "Version inconnue"
-        
-        # Message de succès
-        success_message = f"✅ Les données ont été correctement importées.\n\n"
-        success_message += f"📊 Informations:\n"
-        success_message += f"• Version: {version_info}\n"
-        if db_info['organization']:
-            success_message += f"• Organisation: {db_info['organization']}\n"
-        if backup_file_path:
-            success_message += f"• Sauvegarde créée: {os.path.basename(backup_file_path)}\n"
-        success_message += f"\n💡 Vous pouvez maintenant utiliser l'application avec les nouvelles données."
-        
-        raise_success(
-            "✅ Importation réussie",
-            success_message
-        )
-        
-        logger.info("✅ Import de la base de données terminé avec succès")
+                logger.warning("Fermeture DB avant import: %s", e)
 
-    except IOError as e:
-        logger.error(f"Erreur IO lors de l'import: {e}")
-        raise_error(
-            "❌ Erreur de fichier",
-            f"Une erreur s'est produite lors de l'accès aux fichiers.\n\n"
-            f"Erreur: {str(e)}\n\n"
-            f"Vérifiez que:\n"
-            f"• Le fichier sélectionné est accessible\n"
-            f"• Vous avez les droits de lecture/écriture\n"
-            f"• Le fichier n'est pas corrompu"
-        )
+        # 5) Sauvegarde de sécurité
+        backup_name = None
+        if os.path.exists(path_db_file):
+            backup_name = "Avant-{}-{}.db".format(
+                os.path.basename(DB_FILE).replace(".db", ""),
+                datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss"),
+            )
+            backup_path = os.path.join(parent_dir, backup_name)
+            try:
+                shutil.copy2(path_db_file, backup_path)
+            except Exception as e:
+                raise_error(
+                    "Sauvegarde impossible",
+                    f"Import annulé : impossible de sauvegarder la base actuelle.\n{e}",
+                )
+                return False
+
+        # 6) Remplacer
+        try:
+            shutil.copy2(file_path, path_db_file)
+        except Exception as e:
+            if backup_name:
+                try:
+                    shutil.copy2(os.path.join(parent_dir, backup_name), path_db_file)
+                except Exception:
+                    pass
+            raise_error("Échec de l'import", f"Impossible de copier le fichier.\n{e}")
+            return False
+
+        # 7) Reconnecter + schéma métier
+        try:
+            init_database()
+            _apply_app_schema_after_import()
+        except Exception as e:
+            raise_error(
+                "Import partiel",
+                f"Fichier importé, mais réinitialisation incomplète.\n"
+                f"{e}\n\nRedémarrez l'application.",
+            )
+            return False
+
+        msg = f"Base importée : {os.path.basename(file_path)}"
+        if backup_name:
+            msg += f"\nSauvegarde : {backup_name}"
+        msg += "\nLes anciennes données sont sur l'activité « Principale »."
+        raise_success("Import réussi", msg)
+        logger.info("Import local réussi depuis %s", file_path)
+        return True
+
     except Exception as e:
-        logger.error(f"Erreur inattendue lors de l'import: {e}", exc_info=True)
-        raise_error(
-            "❌ Erreur lors de l'import",
-            f"Une erreur inattendue s'est produite.\n\n"
-            f"Erreur: {str(e)}\n\n"
-            f"Veuillez contacter le support si le problème persiste."
-        )
+        logger.error("Erreur import local: %s", e, exc_info=True)
+        raise_error("Erreur d'import", str(e))
+        return False
 
 
 def upload_file(folder=None, dst_folder=None, type_f=None):
@@ -587,7 +502,8 @@ def select_usb_drive(parent=None):
                 parent,
                 "🔌 Sélectionner votre clé USB pour la sauvegarde",
                 "",
-                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+                QFileDialog.Option.ShowDirsOnly
+                | QFileDialog.Option.DontResolveSymlinks
             )
             
             if not selected_dir:
@@ -627,7 +543,7 @@ def select_usb_drive(parent=None):
         # Plusieurs clés USB détectées, proposer de choisir
         # Utiliser QFileDialog pour permettre à l'utilisateur de choisir
         msg = QMessageBox(parent)
-        msg.setIcon(QMessageBox.Question)
+        msg.setIcon(QMessageBox.Icon.Question)
         msg.setWindowTitle("🔌 Sélectionner une clé USB")
         msg.setText(f"{len(usb_drives)} clés USB détectées")
         msg.setInformativeText(
@@ -648,7 +564,8 @@ def select_usb_drive(parent=None):
             parent,
             "🔌 Sélectionner une clé USB pour la sauvegarde",
             usb_drives[0],
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            QFileDialog.Option.ShowDirsOnly
+            | QFileDialog.Option.DontResolveSymlinks
         )
         
         if not selected_dir:
@@ -672,28 +589,101 @@ def select_usb_drive(parent=None):
         return None
 
 
-def _prune_backup_dir(backup_dir, max_backups):
+# Ancien : backup_YYYY-MM-DD.db — Nouveau : backup_AppName_Version_YYYY-MM-DD.db
+_BACKUP_DAY_RE = re.compile(
+    r"^backup_(?:.+_)?(\d{4}-\d{2}-\d{2})(?:_.*)?\.db$",
+    re.IGNORECASE,
+)
+
+
+def _safe_backup_token(raw, fallback="app"):
+    """Jeton sûr pour un nom de fichier."""
+    safe = re.sub(r"[^\w.\-]+", "_", str(raw or "").strip(), flags=re.UNICODE)
+    safe = safe.strip("._")
+    return safe or fallback
+
+
+def _app_name_for_backup():
+    """Nom d'application sûr pour un nom de fichier."""
     try:
+        from .cstatic import CConstants
+
+        raw = str(getattr(CConstants, "APP_NAME", "") or "app").strip()
+    except Exception:
+        raw = "app"
+    return _safe_backup_token(raw, "app")
+
+
+def _app_version_for_backup():
+    """Version d'application sûre pour un nom de fichier."""
+    try:
+        from .cstatic import CConstants
+
+        raw = str(getattr(CConstants, "APP_VERSION", "") or "").strip()
+    except Exception:
+        raw = ""
+    return _safe_backup_token(raw, "0")
+
+
+def _backup_day_key(path):
+    """Jour de la sauvegarde, d'après le nom (backup[_App][_Ver]_YYYY-MM-DD…)."""
+    match = _BACKUP_DAY_RE.match(os.path.basename(path))
+    if match:
+        return match.group(1)
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d")
+    except OSError:
+        return os.path.basename(path)
+
+
+def _remove_backup(path):
+    try:
+        os.remove(path)
+        logger.debug("Ancienne sauvegarde supprimée: %s", os.path.basename(path))
+    except Exception as e:
+        logger.warning(
+            "Impossible de supprimer l'ancienne sauvegarde %s: %s",
+            path,
+            e,
+        )
+
+
+def _daily_backup_path(backup_dir):
+    """Un seul fichier pour la journée : backup_AppName_Version_YYYY-MM-DD.db."""
+    app = _app_name_for_backup()
+    version = _app_version_for_backup()
+    day = datetime.now().strftime("%Y-%m-%d")
+    name = f"backup_{app}_{version}_{day}.db"
+    return os.path.join(backup_dir, name)
+
+
+def _prune_backup_dir(backup_dir, max_backups):
+    """Garde un fichier par jour, puis au plus ``max_backups`` jours (cette appli)."""
+    try:
+        app = _app_name_for_backup()
+        app_prefix = f"backup_{app}_"
+        legacy_day = re.compile(r"^backup_\d{4}-\d{2}-\d{2}\.db$")
         backup_files = [
             os.path.join(backup_dir, f)
             for f in os.listdir(backup_dir)
-            if f.startswith("backup_") and f.endswith(".db")
+            if f.endswith(".db")
+            and (f.startswith(app_prefix) or legacy_day.match(f))
         ]
-        backup_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-        if len(backup_files) > max_backups:
-            for old_backup in backup_files[max_backups:]:
-                try:
-                    os.remove(old_backup)
-                    logger.debug(
-                        "Ancienne sauvegarde supprimée: %s",
-                        os.path.basename(old_backup),
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Impossible de supprimer l'ancienne sauvegarde %s: %s",
-                        old_backup,
-                        e,
-                    )
+        by_day = {}
+        for path in backup_files:
+            by_day.setdefault(_backup_day_key(path), []).append(path)
+
+        kept = []
+        for paths in by_day.values():
+            paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            kept.append(paths[0])
+            for extra in paths[1:]:
+                _remove_backup(extra)
+
+        kept.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        if max_backups is not None and len(kept) > max_backups:
+            for old_backup in kept[max_backups:]:
+                _remove_backup(old_backup)
     except Exception as e:
         logger.warning("Erreur lors du nettoyage des anciennes sauvegardes: %s", e)
 
@@ -710,8 +700,7 @@ def _save_database_local(max_backups=10):
     except OSError as e:
         logger.warning("Sauvegarde locale: impossible de créer %s : %s", backup_dir, e)
         return False
-    backup_filename = f"backup_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm%Ss')}.db"
-    backup_path = os.path.join(backup_dir, backup_filename)
+    backup_path = _daily_backup_path(backup_dir)
     try:
         shutil.copy2(db_file_abs, backup_path)
         logger.info("Sauvegarde locale: %s", backup_path)
@@ -749,8 +738,7 @@ def _save_database_on_usb(max_backups=10, parent=None):
             )
             return False
 
-        backup_filename = f"backup_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm%Ss')}.db"
-        backup_path = os.path.join(backup_dir, backup_filename)
+        backup_path = _daily_backup_path(backup_dir)
 
         try:
             shutil.copy2(db_file_abs, backup_path)
@@ -778,21 +766,97 @@ def _save_database_on_usb(max_backups=10, parent=None):
         return False
 
 
+def _offer_usb_backup_on_exit(max_backups=10, parent=None):
+    """Propose toujours une sauvegarde sur clé USB à la fermeture (clé branchée ou non)."""
+    if parent is None:
+        return False
+
+    usb_drives = get_usb_drives()
+
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Icon.Question)
+    msg.setWindowTitle("Sauvegarde sur clé USB")
+    if len(usb_drives) == 1:
+        drive_label = os.path.basename(usb_drives[0].rstrip("/\\")) or usb_drives[0]
+        msg.setText("Une clé USB a été détectée :\n{}".format(drive_label))
+        msg.setInformativeText(
+            "Voulez-vous sauvegarder la base de données sur la clé avant de quitter ?"
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+    elif len(usb_drives) > 1:
+        msg.setText("{} clés USB ont été détectées.".format(len(usb_drives)))
+        msg.setInformativeText(
+            "Voulez-vous sauvegarder la base de données sur une clé avant de quitter ?"
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+    else:
+        msg.setText("Aucune clé USB n'est branchée.")
+        msg.setInformativeText(
+            "Voulez-vous quand même sauvegarder la base de données sur une clé USB ?\n\n"
+            "Vous pourrez brancher une clé puis la sélectionner."
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+
+    msg.setStandardButtons(
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    )
+    yes_btn = msg.button(QMessageBox.StandardButton.Yes)
+    no_btn = msg.button(QMessageBox.StandardButton.No)
+    if yes_btn is not None:
+        yes_btn.setText("Oui, sauvegarder")
+    if no_btn is not None:
+        no_btn.setText("Non, quitter")
+
+    if msg.exec() != QMessageBox.StandardButton.Yes:
+        logger.info("Sauvegarde USB refusée par l'utilisateur")
+        return False
+
+    ok = _save_database_on_usb(max_backups=max_backups, parent=parent)
+    if ok:
+        logger.info("Sauvegarde USB effectuée avant fermeture")
+        info = QMessageBox(parent)
+        info.setIcon(QMessageBox.Icon.Information)
+        info.setWindowTitle("Sauvegarde USB")
+        info.setText("La base de données a été sauvegardée sur la clé USB.")
+        info.setStandardButtons(QMessageBox.StandardButton.Ok)
+        info.exec()
+    return ok
+
+
+_EXIT_BACKUP_DONE = False
+
+
 def save_database_on_exit(max_backups=10, parent=None):
     """
     Sauvegarde automatique à la fermeture.
 
-    Par défaut (BACKUP_TO_USB=False) : copie silencieuse dans ``backups/`` à côté
-    de ``database.db`` — adapté aux exes et à ``atexit`` sans dialogue.
+    Par défaut (BACKUP_TO_USB=False) :
+    - copie silencieuse dans ``backups/`` à côté de ``database.db`` ;
+    - propose toujours une sauvegarde sur clé USB (branchement ou sélection manuelle).
 
     Si BACKUP_TO_USB=True : comportement historique (choix / détection de clé USB).
     """
+    global _EXIT_BACKUP_DONE
     try:
         from . import cstatic
 
         if cstatic.BACKUP_TO_USB:
-            return _save_database_on_usb(max_backups, parent)
-        return _save_database_local(max_backups)
+            ok = _save_database_on_usb(max_backups, parent)
+            _EXIT_BACKUP_DONE = True
+            return ok
+
+        local_ok = _save_database_local(max_backups)
+        try:
+            _offer_usb_backup_on_exit(max_backups=max_backups, parent=parent)
+        except Exception as usb_error:
+            logger.warning("Proposition de sauvegarde USB ignorée: %s", usb_error)
+        _EXIT_BACKUP_DONE = True
+        return local_ok
     except Exception as e:
         logger.error("Erreur lors de la sauvegarde automatique de la base: %s", e)
         return False
+
+
+def exit_backup_already_done():
+    """True si la sauvegarde de fermeture a déjà été faite (UI)."""
+    return _EXIT_BACKUP_DONE

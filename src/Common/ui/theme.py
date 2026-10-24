@@ -15,12 +15,6 @@ THEME_SYSTEM = "system"
 
 THEME_NAMES = (THEME_LIGHT, THEME_DARK, THEME_SYSTEM)
 
-# Dimensions UI uniformes (source unique pour boutons, champs, etc.)
-UI_CONTROL_MIN_HEIGHT = 36
-UI_BUTTON_MIN_WIDTH = 88
-UI_BUTTON_PADDING = "8px 16px"
-UI_INPUT_PADDING = "8px 12px"
-
 # Valeurs historiques / vides → suivre le système par défaut
 _THEME_ALIASES_SYSTEM = frozenset(("", "default"))
 
@@ -61,9 +55,6 @@ SEMANTIC_CONTROLS_STYLESHEET = """
     }
 
     QPushButton#linkButton, QCommandLinkButton#linkButton {
-        min-height: 0px;
-        min-width: 0px;
-        padding: 4px 8px;
         background-color: transparent;
         color: palette(link);
         border: none;
@@ -74,7 +65,85 @@ SEMANTIC_CONTROLS_STYLESHEET = """
     }
 
     QPushButton#compactButton, QCommandLinkButton#compactButton {
-        min-width: 0px;
+    }
+"""
+
+# Padding, rayon et focus communs à tous les champs (clair et sombre).
+# Padding trop grand + boutons spinbox masquent le texte (surtout les dates).
+INPUT_FIELDS_STYLESHEET = """
+    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+        padding: 4px 10px;
+        min-height: 1.6em;
+        border-radius: 8px;
+    }
+    QTextEdit, QPlainTextEdit {
+        padding: 8px 10px;
+        border-radius: 8px;
+    }
+    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+    QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus,
+    QDateEdit:focus, QDateTimeEdit:focus, QTimeEdit:focus {
+        border: 1px solid palette(highlight);
+    }
+    QComboBox {
+        padding-right: 8px;
+    }
+    QComboBox QLineEdit {
+        padding: 2px 6px;
+        border: none;
+        background: transparent;
+        min-height: 1.4em;
+        border-radius: 0px;
+    }
+    QComboBox::drop-down {
+        border: none;
+        width: 22px;
+    }
+    QComboBox QAbstractItemView {
+        border: 1px solid palette(midlight);
+        border-radius: 8px;
+        padding: 4px;
+        outline: none;
+        selection-background-color: palette(highlight);
+        selection-color: palette(highlighted-text);
+    }
+    QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
+        width: 18px;
+        border: none;
+    }
+    QDateEdit, QDateTimeEdit, QTimeEdit {
+        padding: 2px 28px 2px 8px;
+        min-height: 32px;
+        min-width: 130px;
+        border-radius: 8px;
+    }
+    QDateEdit::drop-down, QDateTimeEdit::drop-down, QTimeEdit::drop-down {
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        width: 24px;
+        border: none;
+    }
+    QDateEdit::up-button, QDateEdit::down-button,
+    QDateTimeEdit::up-button, QDateTimeEdit::down-button,
+    QTimeEdit::up-button, QTimeEdit::down-button {
+        width: 0px;
+        height: 0px;
+        border: none;
+    }
+    QDateEdit QLineEdit, QDateTimeEdit QLineEdit, QTimeEdit QLineEdit {
+        background: transparent;
+        border: none;
+        padding: 0px 4px;
+        min-height: 1.4em;
+        color: palette(text);
+    }
+    QTableWidget QLineEdit, QTableView QLineEdit,
+    QTableWidget QComboBox, QTableView QComboBox,
+    QTableWidget QSpinBox, QTableView QSpinBox,
+    QTableWidget QDoubleSpinBox, QTableView QDoubleSpinBox {
+        padding: 2px 6px;
+        min-height: 1.5em;
+        border-radius: 6px;
     }
 """
 
@@ -175,9 +244,6 @@ THEME_DARK_STYLESHEET = """
         color: #ffffff;
         border: 1px solid transparent;
         border-radius: 8px;
-        padding: 6px 8px;
-        min-height: 36px;
-        min-width: 36px;
     }
     QToolButton:hover {
         background-color: #3a3a3a;
@@ -222,20 +288,29 @@ THEME_DARK_STYLESHEET = """
     }
 
     /* Inputs */
-    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QDateTimeEdit, QComboBox {
+    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
+    QDateEdit, QDateTimeEdit, QTimeEdit, QComboBox {
         background-color: #303030;
         color: #ffffff;
         border: 1px solid #4f4f4f;
-        border-radius: 8px;
-        padding: 8px 12px;
-        min-height: 36px;
+        border-radius: 10px;
     }
-    QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateTimeEdit:hover, QComboBox:hover {
+    QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover,
+    QDoubleSpinBox:hover, QDateEdit:hover, QDateTimeEdit:hover, QTimeEdit:hover,
+    QComboBox:hover {
         border-color: #6a6a6a;
     }
-    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {
-        border: 2px solid #2d7bdc;
-        padding: 7px 11px;
+    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
+    QDoubleSpinBox:focus, QDateEdit:focus, QDateTimeEdit:focus, QTimeEdit:focus,
+    QComboBox:focus {
+        border: 1px solid #2d7bdc;
+    }
+    QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled,
+    QDoubleSpinBox:disabled, QDateEdit:disabled, QDateTimeEdit:disabled, QTimeEdit:disabled,
+    QComboBox:disabled {
+        background-color: #2f2f2f;
+        color: #a0a0a0;
+        border-color: #3d3d3d;
     }
     QComboBox::drop-down { border: none; width: 28px; }
     QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #ffffff; margin-right: 8px; }
@@ -246,9 +321,6 @@ THEME_DARK_STYLESHEET = """
         color: #ffffff;
         border: 1px solid #555555;
         border-radius: 8px;
-        padding: 8px 16px;
-        min-height: 36px;
-        min-width: 88px;
         text-decoration: none;
     }
     QPushButton:hover, QCommandLinkButton:hover { background-color: #454545; }
@@ -338,9 +410,6 @@ THEME_LIGHT_STYLESHEET = """
         color: #1f2329;
         border: 1px solid transparent;
         border-radius: 8px;
-        padding: 6px 8px;
-        min-height: 36px;
-        min-width: 36px;
     }
     QToolButton:hover {
         background-color: #eef2f7;
@@ -385,22 +454,26 @@ THEME_LIGHT_STYLESHEET = """
     }
 
     /* Inputs */
-    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QDateTimeEdit, QComboBox {
+    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
+    QDateEdit, QDateTimeEdit, QTimeEdit, QComboBox {
         background-color: #ffffff;
         color: #1f2329;
         border: 1px solid #cdd4dd;
-        border-radius: 8px;
-        padding: 8px 12px;
-        min-height: 36px;
+        border-radius: 10px;
     }
-    QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateTimeEdit:hover, QComboBox:hover {
+    QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QSpinBox:hover,
+    QDoubleSpinBox:hover, QDateEdit:hover, QDateTimeEdit:hover, QTimeEdit:hover,
+    QComboBox:hover {
         border-color: #aab4c0;
     }
-    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus, QComboBox:focus {
-        border: 2px solid #2d7bdc;
-        padding: 7px 11px;
+    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
+    QDoubleSpinBox:focus, QDateEdit:focus, QDateTimeEdit:focus, QTimeEdit:focus,
+    QComboBox:focus {
+        border: 1px solid #2d7bdc;
     }
-    QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateTimeEdit:disabled, QComboBox:disabled {
+    QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QSpinBox:disabled,
+    QDoubleSpinBox:disabled, QDateEdit:disabled, QDateTimeEdit:disabled, QTimeEdit:disabled,
+    QComboBox:disabled {
         background-color: #f0f2f5;
         color: #9aa3af;
         border-color: #e3e7ec;
@@ -414,9 +487,6 @@ THEME_LIGHT_STYLESHEET = """
         color: #1f2329;
         border: 1px solid #cdd4dd;
         border-radius: 8px;
-        padding: 8px 16px;
-        min-height: 36px;
-        min-width: 88px;
         text-decoration: none;
     }
     QPushButton:hover, QCommandLinkButton:hover { background-color: #eef2f7; border-color: #aab4c0; }
@@ -619,8 +689,8 @@ def get_stylesheet(theme_name):
         str: Stylesheet à appliquer (thème clair ou sombre selon le cas).
     """
     if theme_name == THEME_DARK:
-        return THEME_DARK_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
-    return THEME_LIGHT_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
+        return THEME_DARK_STYLESHEET + INPUT_FIELDS_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
+    return THEME_LIGHT_STYLESHEET + INPUT_FIELDS_STYLESHEET + SEMANTIC_CONTROLS_STYLESHEET
 
 
 def apply_theme(app, theme_name, save_to_settings=True):

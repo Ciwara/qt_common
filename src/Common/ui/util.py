@@ -6,13 +6,15 @@
 
 import ctypes
 import hashlib
+import json
 import locale
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import mktime, strptime
 from urllib.request import URLError, urlopen
 from uuid import getnode
@@ -41,20 +43,54 @@ def internet_on():
         logger.debug(exc)
 
 
+def _configured_server_url():
+    try:
+        return str(get_server_url("")).strip()
+    except Exception:
+        from Common.cstatic import BASE_URL
+
+        return str(BASE_URL).strip()
+
+
+def _is_local_server(url):
+    lowered = str(url or "").lower()
+    return "://127.0.0.1" in lowered or "://localhost" in lowered
+
+
 def access_server():
     if not CConstants.SERV:
         logger.info("Not server mode")
         return False
 
-    if not internet_on():
-        return
-    try:
-        urlopen(get_server_url(""), timeout=1)
-        return True
-    except URLError as err:
-        return False
-    except Exception as e:
-        logger.debug(e)
+    import sys
+
+    from Common.cstatic import LOCAL_DEV_URL
+
+    candidates = []
+    server_url = _configured_server_url()
+    if server_url:
+        candidates.append(server_url.rstrip("/"))
+    allow_local = (not getattr(sys, "frozen", False)) or bool(
+        getattr(CConstants, "DEBUG", False)
+    )
+    if allow_local:
+        local = str(LOCAL_DEV_URL).rstrip("/")
+        if local and local not in candidates:
+            candidates.append(local)
+
+    for candidate in candidates:
+        # Le serveur local de debug n'a pas besoin d'accès à Internet.
+        if not _is_local_server(candidate) and not internet_on():
+            continue
+        try:
+            urlopen(candidate, timeout=1)
+            return True
+        except URLError:
+            continue
+        except Exception as e:
+            logger.debug(e)
+            continue
+    return False
 
 
 def device_amount(value, dvs=None):
@@ -373,6 +409,9 @@ def format_date(dat):
 
 
 def datetime_to_str(date):
+    """Timestamp Unix ; None si la date est absente (champs nullable)."""
+    if date is None:
+        return None
     return mktime(strptime(date.strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S"))
 
 
@@ -486,6 +525,7 @@ def is_valide_mac():
     if not license_required():
         return None, CConstants.OK
 
+    remember_machine()
     code = str(make_lcse())
     try:
         lcse = License.get(License.code == code)
@@ -499,50 +539,602 @@ def is_valide_mac():
 
 
 _STABLE_NODE_BASENAME = ".common_device_node"
+_LICENSE_SNAPSHOT = "license.json"
+_USED_CODES = "used_codes.json"
+_EVALUATION_KEY = "__evaluation__"
 
 
-def _stable_machine_node():
-    """Persiste `uuid.getnode()` une fois (Wi‑Fi / VPN peuvent le faire varier)."""
-    base = Path(_license_base_dir())
-    path = base / _STABLE_NODE_BASENAME
+def _application_name():
+    """Nom de l'application en cours. Il entre dans la clé de licence."""
+    import Common.cstatic as cstatic
+
+    name = getattr(cstatic.CConstants, "APP_NAME", None) or getattr(cstatic, "APP_NAME", None)
+    text = str(name or "").strip()
+    return text or "Common"
+
+
+def _app_license_dir():
+    """Dossier de licence propre à l'application, dans le profil utilisateur."""
+    raw = _application_name()
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in raw).strip("_")
+    return _durable_license_dir() / "apps" / (safe or "Common")
+
+
+def _durable_license_dir():
+    """Dossier du profil utilisateur : l'identifiant machine y survit à une réinstallation."""
+    override = (os.environ.get("COMMON_SHARED_LICENSE_DIR") or "").strip()
+    if override:
+        return Path(override)
+    system = platform.system()
+    home = Path.home()
+    if system == "Windows":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        root = Path(base) if base else home / "AppData" / "Local"
+    elif system == "Darwin":
+        root = home / "Library" / "Application Support"
+    else:
+        xdg = (os.environ.get("XDG_DATA_HOME") or "").strip()
+        root = Path(xdg) if xdg else home / ".local" / "share"
+    return root / "qt_common"
+
+
+def _read_node_file(path):
     try:
         if path.is_file():
             text = path.read_text(encoding="utf-8", errors="replace").strip()
             if text:
                 return int(text)
     except (ValueError, OSError):
-        logger.debug("Lecture .common_device_node impossible", exc_info=True)
-    n = int(getnode())
+        logger.debug("Lecture identifiant machine impossible: %s", path, exc_info=True)
+    return None
+
+
+def _write_node_file(path, value):
     try:
-        base.mkdir(parents=True, exist_ok=True)
-        path.write_text(str(n), encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_file() and path.read_text(encoding="utf-8", errors="replace").strip() == str(int(value)):
+            return
+        path.write_text(str(int(value)), encoding="utf-8")
     except OSError as e:
         logger.warning("Impossible d'enregistrer l'identifiant machine (%s): %s", path, e)
-    return n
+
+
+_HARDWARE_STAMP = ".common_device_hw"
+
+
+def _hardware_token():
+    """Jeton du matériel de cet ordinateur. Vide si le système ne le fournit pas."""
+    token = ""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            output = subprocess.check_output(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                text=True,
+                timeout=5,
+                stderr=subprocess.DEVNULL,
+            )
+            match = None
+            for line in output.splitlines():
+                if "IOPlatformUUID" in line and "=" in line:
+                    match = line.split("=", 1)[1].strip().strip('"')
+                    break
+            token = match or ""
+        elif system == "Windows":
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography"
+            ) as key:
+                token, _kind = winreg.QueryValueEx(key, "MachineGuid")
+        else:
+            for candidate in (Path("/etc/machine-id"), Path("/var/lib/dbus/machine-id")):
+                if candidate.is_file():
+                    token = candidate.read_text(encoding="utf-8", errors="replace").strip()
+                    if token:
+                        break
+    except Exception:
+        logger.debug("Identifiant matériel indisponible", exc_info=True)
+        token = ""
+    return str(token or "").strip()
+
+
+def _hardware_node():
+    """Numéro lié au matériel. None si seul un identifiant copiable est disponible."""
+    token = _hardware_token()
+    if not token:
+        return None
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return int(digest[:12], 16)
+
+
+def _stable_machine_node():
+    """Numéro de cette machine seule.
+
+    Il vient du matériel (UUID, MachineGuid ou machine-id), pas d'un fichier
+    posé à côté de l'application : ce fichier voyage quand on copie le dossier
+    sur un autre ordinateur. Après réinstallation sur le même ordinateur, le
+    numéro reste celui du matériel.
+    """
+    durable = _durable_license_dir() / _STABLE_NODE_BASENAME
+    stamp_path = _durable_license_dir() / _HARDWARE_STAMP
+    hardware = _hardware_node()
+    if hardware is not None:
+        stored = _read_node_file(durable)
+        stamp = _read_node_file(stamp_path)
+        if stored is not None and stamp == hardware:
+            return stored
+        _write_node_file(durable, hardware)
+        _write_node_file(stamp_path, hardware)
+        logger.info("Identifiant de cette machine enregistré")
+        return hardware
+    stored = _read_node_file(durable)
+    if stored is not None:
+        return stored
+    node = int(getnode())
+    _write_node_file(durable, node)
+    logger.info("Identifiant machine enregistré dans le profil utilisateur")
+    return node
 
 
 def clean_mac():
-    """Identifiant matériel stabilisé (fichier à côté de la base / LICENCE)."""
+    """Identifiant matériel stabilisé, conservé hors du dossier de l'application."""
     return _stable_machine_node()
 
 
+def machine_identity():
+    """Identifiant stable de l'ordinateur. Il ne change pas quand l'adresse MAC change."""
+    return "%x" % int(_stable_machine_node())
+
+
+def hardware_guid():
+    """MachineGuid (Windows), IOPlatformUUID (macOS) ou machine-id (Linux)."""
+    return _hardware_token()
+
+
+def _is_md5_hex(text):
+    low = str(text or "").strip().lower()
+    return len(low) == 32 and all(c in "0123456789abcdef" for c in low)
+
+
+def _license_file_paths():
+    return (
+        Path(get_lcse_file()),
+        _app_license_dir() / "LICENCE",
+    )
+
+
+def _read_license_code_file():
+    for path in _license_file_paths():
+        try:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            continue
+        if _is_md5_hex(text):
+            return text.lower()
+    return None
+
+
+def write_lcse_file(content):
+    """Écrit le code licence à côté de l'application et dans le profil utilisateur."""
+    text = str(content).strip()
+    for path in _license_file_paths():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        except OSError as e:
+            logger.warning("Impossible d'enregistrer LICENCE (%s): %s", path, e)
+
+
+def remove_lcse_files():
+    """Retire la licence de cette application, pas l'identifiant de la machine."""
+    for path in _license_file_paths():
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning("Impossible de supprimer LICENCE (%s): %s", path, e)
+    snapshot = _app_license_dir() / _LICENSE_SNAPSHOT
+    try:
+        snapshot.unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning("Impossible de supprimer la copie de licence (%s): %s", snapshot, e)
+
+
+def _dump_dt(value):
+    if not value:
+        return None
+    try:
+        return value.strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return None
+
+
+def _load_dt(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def persist_license_record(license_row):
+    """Copie la licence de cette application hors de son dossier."""
+    if license_row is None or not getattr(license_row, "code", None):
+        return
+    payload = {
+        "application": _application_name(),
+        "code": str(license_row.code),
+        "isactivated": bool(license_row.isactivated),
+        "activation_date": _dump_dt(getattr(license_row, "activation_date", None)),
+        "can_expired": bool(license_row.can_expired),
+        "evaluation": bool(license_row.evaluation),
+        "expiration_date": _dump_dt(getattr(license_row, "expiration_date", None)),
+        "owner": license_row.owner or "",
+    }
+    path = _app_license_dir() / _LICENSE_SNAPSHOT
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.warning("Impossible de mémoriser la licence (%s): %s", path, e)
+        return
+    write_lcse_file(payload["code"])
+
+
+def _load_license_snapshot():
+    path = _app_license_dir() / _LICENSE_SNAPSHOT
+    try:
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.debug("Copie de licence illisible", exc_info=True)
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _payload_grants(payload):
+    """Même règle que License.can_use, à partir de la copie partagée."""
+    if not payload:
+        return False
+    if payload.get("isactivated"):
+        return True
+    if not payload.get("can_expired"):
+        return False
+    expires = _load_dt(payload.get("expiration_date"))
+    return expires is not None and datetime.now() < expires
+
+
+def _row_grants(row):
+    if row is None:
+        return False
+    if row.isactivated:
+        return True
+    if not row.can_expired or not row.expiration_date:
+        return False
+    return datetime.now() < row.expiration_date
+
+
+def _restore_durable_license(expected_code):
+    from Common.models import License
+
+    payload = _load_license_snapshot()
+    if not payload:
+        return None
+    code = str(payload.get("code") or "")
+    recorded_app = str(payload.get("application") or "")
+    if recorded_app and recorded_app != _application_name():
+        return None
+    if not code or code != str(expected_code):
+        return None
+    try:
+        row = License.get(License.code == code)
+    except License.DoesNotExist:
+        row = License(code=code)
+    row.isactivated = bool(payload.get("isactivated"))
+    row.can_expired = bool(payload.get("can_expired"))
+    row.evaluation = bool(payload.get("evaluation"))
+    row.owner = payload.get("owner") or row.owner or "USER"
+    activated = _load_dt(payload.get("activation_date"))
+    if activated is not None:
+        row.activation_date = activated
+    expires = _load_dt(payload.get("expiration_date"))
+    row.expiration_date = expires
+    row.save()
+    logger.info("Licence de %s restaurée", _application_name())
+    return row
+
+
+def remember_machine():
+    """Mémorise la clé de cette application et la rétablit après réinstallation.
+
+    La clé dépend du poste et du nom de l'application. Activer l'une
+    ne débloque pas les autres.
+    """
+    from Common.models import License
+
+    _stable_machine_node()
+    code = str(make_lcse())
+    saved = _load_license_snapshot()
+    saved_ok = bool(saved) and str(saved.get("code") or "") == code
+
+    if saved_ok:
+        row = _restore_durable_license(code)
+        if row is not None and _payload_grants(saved):
+            persist_license_record(row)
+        return
+
+    try:
+        local = License.get(License.code == code)
+    except License.DoesNotExist:
+        local = None
+    except Exception:
+        logger.exception("Lecture de la licence impossible")
+        return
+
+    if _row_grants(local):
+        persist_license_record(local)
+        logger.info("Licence de %s mémorisée pour cette application", _application_name())
+
+
+def _used_codes_path():
+    return _app_license_dir() / _USED_CODES
+
+
+def _load_used_codes():
+    path = _used_codes_path()
+    try:
+        if not path.is_file():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.debug("Historique des codes illisible", exc_info=True)
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    codes = data.get("codes")
+    return codes if isinstance(codes, dict) else {}
+
+
+def _save_used_codes(codes):
+    path = _used_codes_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"codes": codes}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _normalize_activation_code(raw):
+    return "".join(str(raw or "").strip().replace("|", ":").replace(";", ":").split())
+
+
+def remember_evaluation_period(expiration):
+    """Mémorise une évaluation déjà commencée, sans en reculer ni en avancer la fin."""
+    if expiration is None:
+        return
+    codes = _load_used_codes()
+    if _EVALUATION_KEY in codes:
+        return
+    codes[_EVALUATION_KEY] = {"expiration": _dump_dt(expiration), "days": 60}
+    _save_used_codes(codes)
+
+
+def start_evaluation_once(days=60):
+    """Démarre l'évaluation une seule fois. Une période échue ne peut pas être relancée."""
+    codes = _load_used_codes()
+    entry = codes.get(_EVALUATION_KEY)
+    now = datetime.now().replace(microsecond=0)
+    if isinstance(entry, dict):
+        expires = _load_dt(entry.get("expiration"))
+        if expires is not None and now >= expires:
+            raise ValueError(
+                "La période d'évaluation est terminée et ne peut plus être réutilisée."
+            )
+        if expires is not None:
+            return expires
+    expires = now + timedelta(days=int(days))
+    codes[_EVALUATION_KEY] = {"expiration": _dump_dt(expires), "days": int(days)}
+    _save_used_codes(codes)
+    return expires
+
+
+def register_activation_code(raw, machine_hash, app_slug):
+    """Valide un code et fige sa date de fin à la première utilisation.
+
+    Un code à durée limitée déjà expiré est refusé. Le recoller ne
+    recommence pas la période. Une licence illimitée n'expire pas.
+    Retourne ``(jours ou None, date de fin ou None)``.
+    """
+    text = _normalize_activation_code(raw)
+    days = interpret_activation_code(text, machine_hash, app_slug)
+    codes = _load_used_codes()
+    entry = codes.get(text)
+    now = datetime.now().replace(microsecond=0)
+    if isinstance(entry, dict) and "expiration" in entry:
+        expires = _load_dt(entry.get("expiration"))
+        if expires is not None and now >= expires:
+            raise ValueError("Ce code a expiré et ne peut plus être réutilisé.")
+        return days, expires
+    expires = None if days is None else now + timedelta(days=int(days))
+    codes[text] = {"expiration": _dump_dt(expires), "days": days}
+    _save_used_codes(codes)
+    return days, expires
+
+
+def interpret_activation_code(raw, machine_hash, app_slug):
+    """Valide un code de licence généré et retourne sa durée en jours.
+
+    ``None`` signifie une licence illimitée. Seul le code signé
+    ``clé:durée:signature`` est accepté. La clé machine affichée sert à
+    reconnaître l'ordinateur et à produire ce code ; elle n'active rien.
+    """
+    text = str(raw or "").strip()
+    machine = str(machine_hash or "").strip().lower()
+    if not text:
+        raise ValueError("Code de licence vide")
+    if ":" not in text and text.lower() == machine:
+        raise ValueError(
+            "Ce code identifie la machine. Collez le code de licence généré à partir de celui-ci."
+        )
+    from ..license_code import parse_activation_code
+
+    parsed_machine, days = parse_activation_code(text, app_slug=app_slug)
+    if str(parsed_machine).strip().lower() != machine:
+        raise ValueError(
+            "Ce code ne correspond pas à cette application sur cet ordinateur."
+        )
+    return days
+
+
+def apply_signed_license(raw, machine_code, app_slug, evaluation=False):
+    """Enregistre localement un code signé renvoyé par le serveur."""
+    from Common.models import License
+
+    days, expiration = register_activation_code(raw, machine_code, app_slug)
+    try:
+        row = License.get(License.code == machine_code)
+    except License.DoesNotExist:
+        row = License(code=machine_code)
+    row.code = machine_code
+    row.activation_date = datetime.now()
+    row.evaluation = bool(evaluation)
+    row.owner = "Évaluation" if evaluation else "En ligne"
+    if days is None:
+        row.expiration_date = None
+        row.activation()
+    else:
+        row.isactivated = False
+        row.can_expired = True
+        row.expiration_date = expiration
+        row.save()
+        if evaluation:
+            remember_evaluation_period(expiration)
+    write_lcse_file(machine_code)
+    persist_license_record(row)
+    return row
+
+
+def _revoke_local_license(machine_code):
+    from Common.models import License
+
+    try:
+        row = License.get(License.code == machine_code)
+    except License.DoesNotExist:
+        return
+    row.remove_activation()
+    persist_license_record(row)
+
+
+def _license_endpoint_candidates():
+    """URLs à tester pour get_licence : serveur configuré, puis local de développement."""
+    from Common.cstatic import BASE_URL, LOCAL_DEV_URL
+
+    urls = []
+    try:
+        urls.append(str(get_server_url("get_licence")).strip())
+    except Exception:
+        urls.append(str(BASE_URL).rstrip("/") + "/get_licence")
+    local = str(LOCAL_DEV_URL).rstrip("/") + "/get_licence"
+    if local not in urls:
+        urls.append(local)
+    return [url for url in urls if url]
+
+
+def request_online_license():
+    """Au lancement, demande au serveur la licence de cette application sur ce poste."""
+    from urllib.request import Request
+
+    machine = str(make_lcse())
+    app_slug = _application_name()
+    payload = json.dumps({"app": app_slug, "machine_key": machine}).encode("utf-8")
+    body = None
+    last_error = None
+    for url in _license_endpoint_candidates():
+        request = Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=5) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            logger.info("Licence demandée à %s", url)
+            break
+        except Exception as exc:
+            last_error = exc
+            logger.info("Licence injoignable sur %s : %s", url, exc)
+
+    if body is None:
+        logger.info("Licence en ligne indisponible : %s", last_error)
+        return {
+            "ok": False,
+            "offline": True,
+            "message": "Serveur de licences injoignable.",
+        }
+
+    if not isinstance(body, dict):
+        return {"ok": False, "offline": False, "message": "Réponse de licence illisible."}
+
+    if body.get("force_kill") or (
+        body.get("found") and body.get("can_use") == CConstants.IS_EXPIRED
+    ):
+        _revoke_local_license(machine)
+        return {
+            "ok": False,
+            "offline": False,
+            "refused": True,
+            "message": body.get("message") or "Licence refusée par le serveur.",
+        }
+
+    code = body.get("code")
+    if body.get("found") and code and body.get("can_use") == CConstants.OK:
+        try:
+            apply_signed_license(
+                code,
+                machine,
+                app_slug,
+                evaluation=bool(body.get("evaluation")),
+            )
+        except ValueError as exc:
+            return {"ok": False, "offline": False, "message": str(exc)}
+        return {
+            "ok": True,
+            "offline": False,
+            "applied": True,
+            "evaluation": bool(body.get("evaluation")),
+            "message": body.get("message") or "Licence obtenue en ligne.",
+        }
+
+    if body.get("found") and body.get("can_use") == CConstants.OK:
+        return {
+            "ok": True,
+            "offline": False,
+            "message": body.get("message") or "Licence en ligne confirmée.",
+        }
+
+    return {
+        "ok": False,
+        "offline": False,
+        "refused": True,
+        "message": body.get("message") or "Aucune licence en ligne pour ce poste.",
+    }
+
+
 def make_lcse(lcse=None):
-    """MD5 hex utilisé comme `License.code`. Priorité au fichier LICENCE après activation."""
+    """Clé de cette application sur cette machine. Inutilisable sur un autre ordinateur."""
     if lcse is not None:
         return hashlib.md5(str(lcse).encode("utf-8")).hexdigest()
-    try:
-        p = Path(get_lcse_file())
-        if p.is_file():
-            txt = p.read_text(encoding="utf-8", errors="replace").strip()
-            if len(txt) == 32:
-                low = txt.lower()
-                if all(c in "0123456789abcdef" for c in low):
-                    return low
-    except OSError:
-        pass
     raw = _stable_machine_node()
-    logger.debug("Identifiant machine stabilisé (getnode persisté): %s", raw)
-    return hashlib.md5(str(raw).encode("utf-8")).hexdigest()
+    identity = "%s\n%s" % (_application_name(), raw)
+    logger.debug("Clé de licence pour %s", _application_name())
+    return hashlib.md5(identity.encode("utf-8")).hexdigest()
 
 
 def get_lcse_of_file():

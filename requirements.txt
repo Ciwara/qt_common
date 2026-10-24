@@ -1,4 +1,4 @@
-PyQt6>=6.0.0
+PyQt6>=6.11
 # Aperçu PDF intégré (exports_pdf) : pip install PyQt6-QtPdf PyQt6-QtPdfWidgets
 peewee>=3.14.0 
 peewee-migrate>=1.0.0

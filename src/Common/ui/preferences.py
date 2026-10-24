@@ -24,17 +24,23 @@ from .common import Button, FWidget, FormLabel
 class PreferencesDialog(QDialog, FWidget):
     """Fenêtre Préférences (qt_common).
 
-    Objectif:
-    - regrouper la gestion de l'organisation dans les préférences
-    - éviter de laisser cette gestion dans l'écran Administration
+    Regroupe les paramètres applicatifs, l'organisation, l'affichage
+    et l'état de connexion. L'administration (historique / utilisateurs)
+    reste dans Paramètres → Administration.
     """
 
-    def __init__(self, parent=None, *args, **kwargs):
+    TAB_SETTINGS = 0
+    TAB_ORGANISATION = 1
+    TAB_DISPLAY = 2
+    TAB_CONNECTION = 3
+
+    def __init__(self, parent=None, initial_tab=0, *args, **kwargs):
         QDialog.__init__(self, parent, *args, **kwargs)
         FWidget.__init__(self, parent, *args, **kwargs)
 
         self.setWindowTitle("⚙️ Préférences")
         self.setMinimumWidth(700)
+        self.setMinimumHeight(520)
 
         root = QVBoxLayout(self)
         root.setSpacing(12)
@@ -42,8 +48,16 @@ class PreferencesDialog(QDialog, FWidget):
         self.tabs = QTabWidget(self)
         root.addWidget(self.tabs, 1)
 
+        self.tabs.addTab(self._build_settings_tab(), "⚙️ Paramètre")
         self.tabs.addTab(self._build_organisation_tab(), "🏢 Organisation")
         self.tabs.addTab(self._build_display_tab(), "🖥️ Affichage")
+        self.tabs.addTab(self._build_connection_tab(), "🌐 Connexion")
+
+        try:
+            idx = int(initial_tab)
+        except (TypeError, ValueError):
+            idx = 0
+        self.tabs.setCurrentIndex(max(0, min(idx, self.tabs.count() - 1)))
 
         # Boutons
         buttons = QHBoxLayout()
@@ -52,6 +66,15 @@ class PreferencesDialog(QDialog, FWidget):
         close_btn.clicked.connect(self.accept)
         buttons.addWidget(close_btn)
         root.addLayout(buttons)
+
+    def _build_settings_tab(self) -> QWidget:
+        from .admin import SettingsTableWidget
+
+        page = QWidget(self)
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(SettingsTableWidget(parent=self))
+        return page
 
     def _build_display_tab(self) -> QWidget:
         from PyQt6.QtWidgets import QApplication
@@ -145,6 +168,15 @@ class PreferencesDialog(QDialog, FWidget):
                         break
         except Exception:
             pass
+
+    def _build_connection_tab(self) -> QWidget:
+        from .statusbar import ConnectionStatusWidget
+
+        page = QWidget(self)
+        lay = QVBoxLayout(page)
+        lay.setSpacing(12)
+        lay.addWidget(ConnectionStatusWidget(page))
+        return page
 
     def _build_organisation_tab(self) -> QWidget:
         w = QWidget(self)

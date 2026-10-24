@@ -42,7 +42,7 @@ class RestorationViewWidget(QDialog, FWidget):
         self.bn_resto_l.setIcon(
             QIcon.fromTheme("", QIcon(f"{CConstants.img_cmedia}db.png"))
         )
-        self.bn_resto_l.setToolTip("Sélectionner un fichier de sauvegarde depuis votre ordinateur")
+        self.bn_resto_l.setToolTip("Sélectionner un fichier .db depuis votre ordinateur")
         self.bn_resto_l.clicked.connect(self.resto_local_db)
 
         self.bn_ignore = Button("🚀 Nouvelle installation")
@@ -150,75 +150,7 @@ class RestorationViewWidget(QDialog, FWidget):
             print("❌ Nouvelle installation annulée")
 
     def resto_local_db(self):
-        """Restauration des données depuis un fichier local"""
-        from PyQt6.QtWidgets import QMessageBox, QFileDialog
-        import os
-        
-        # Sélection du fichier de sauvegarde
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "📂 Sélectionner le fichier de sauvegarde",
-            "",
-            "Fichiers de sauvegarde (*.db *.sql *.backup);;Tous les fichiers (*)"
-        )
-        
-        if not file_path:
-            print("❌ Aucun fichier sélectionné pour la restauration")
-            return
-        
-        if not os.path.exists(file_path):
-            QMessageBox.critical(
-                self,
-                "❌ Fichier introuvable",
-                f"Le fichier sélectionné n'existe pas :\n{file_path}\n\n"
-                "Vérifiez que le fichier n'a pas été déplacé ou supprimé."
-            )
-            return
-        
-        # Confirmation de la restauration
-        reply = QMessageBox.question(
-            self,
-            "💾 Confirmer la restauration",
-            f"Voulez-vous restaurer les données depuis :\n{os.path.basename(file_path)} ?\n\n"
-            "⚠️ Attention :\n"
-            "• Les données existantes seront remplacées\n"
-            "• Cette action ne peut pas être annulée\n\n"
-            "💡 Assurez-vous que c'est le bon fichier de sauvegarde.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                print(f"💾 Début de la restauration depuis: {file_path}")
-                
-                # Extraire le dossier du fichier sélectionné
-                folder = os.path.dirname(file_path)
-                import_backup(folder=folder, dst_folder=CConstants.ARMOIRE)
-                
-                QMessageBox.information(
-                    self,
-                    "✅ Restauration réussie",
-                    f"🎉 Les données ont été restaurées avec succès !\n\n"
-                    f"📁 Fichier source : {os.path.basename(file_path)}\n"
-                    f"📍 Destination : {CConstants.ARMOIRE}\n\n"
-                    f"Vous pouvez maintenant utiliser l'application."
-                )
-                
-                print(f"✅ Restauration terminée avec succès")
-                self.accept()
-                
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "❌ Erreur de restauration",
-                    f"Une erreur est survenue lors de la restauration :\n\n"
-                    f"Détails techniques : {e}\n\n"
-                    f"Vérifiez que :\n"
-                    f"• Le fichier n'est pas corrompu\n"
-                    f"• Vous avez les droits d'écriture\n"
-                    f"• L'espace disque est suffisant"
-                )
-                print(f"❌ Erreur lors de la restauration: {e}")
-        else:
-            print("❌ Restauration annulée par l'utilisateur")
+        """Import local simplifié : choisir un .db → confirmer → importer."""
+        ok = import_backup(parent=self, confirm=True)
+        if ok:
+            self.accept()

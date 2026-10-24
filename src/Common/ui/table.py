@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -28,6 +29,47 @@ try:
     long
 except NameError:
     long = int
+
+
+def apply_name_stretch(table, name_col, fixed=None):
+    """Colonnes calées sur le texte ; l'espace restant va à la désignation / produit."""
+    if getattr(table, "_applying_name_stretch", False):
+        return
+    header = table.horizontalHeader()
+    if header is None:
+        return
+    try:
+        name_col = int(name_col)
+    except (TypeError, ValueError):
+        return
+    count = header.count()
+    if count <= 0 or name_col < 0 or name_col >= count:
+        return
+
+    table._applying_name_stretch = True
+    try:
+        fixed = dict(fixed or getattr(table, "name_stretch_fixed", None) or {})
+        header.setStretchLastSection(False)
+        other_width = 0
+        for col in range(count):
+            if table.isColumnHidden(col):
+                continue
+            if col in fixed:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+                table.setColumnWidth(col, int(fixed[col]))
+                other_width += table.columnWidth(col)
+            elif col == name_col:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+            else:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+                table.resizeColumnToContents(col)
+                other_width += table.columnWidth(col)
+        remaining = int(table.viewport().width() - other_width)
+        if remaining < 80:
+            remaining = 80
+        table.setColumnWidth(name_col, remaining)
+    finally:
+        table._applying_name_stretch = False
 
 
 class FlexibleTable(QTableWidget):
@@ -52,14 +94,18 @@ class FTableWidget(QTableWidget):
         self.display_vheaders = True
         self.align_map = {}
         self.display_fixed = False
-        self.live_refresh = True
+        self.live_refresh = False
         self.sorter = False
+        self.name_stretch_column = None
+        self.name_stretch_fixed = {}
 
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.horizontalHeader().setStretchLastSection(True)
 
         self.cellClicked.connect(self.click_item)
         self.verticalHeader().setVisible(False)
+        self.verticalHeader().setDefaultSectionSize(36)
+        self.verticalHeader().setMinimumSectionSize(32)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         # Utiliser les couleurs de la palette système pour s'adapter au thème (clair/sombre)
@@ -178,8 +224,8 @@ class FTableWidget(QTableWidget):
     align_map = property(**align_map())
 
     def _reset(self):
-        for index in range(self.rowCount(), -1, -1):
-            self.removeRow(index)
+        self.clearContents()
+        self.setRowCount(0)
 
     def resizeEvent(self, event):
         """lancé à chaque redimensionnement de la fenêtre"""
@@ -188,6 +234,8 @@ class FTableWidget(QTableWidget):
         self.hc = self.height()
         if self.live_refresh:
             self.refresh()
+        else:
+            self.apply_resize_rules()
 
     def refresh(self, resize=False):
         if not self.data:
@@ -241,6 +289,15 @@ class FTableWidget(QTableWidget):
 
         self.extend_rows()
         self.upd()
+        fixed_h = getattr(self, "fixed_row_height", None)
+        if fixed_h:
+            height = int(fixed_h)
+            for row in range(self.rowCount()):
+                self.setRowHeight(row, height)
+        else:
+            self.resizeRowsToContents()
+            for row in range(self.rowCount()):
+                self.setRowHeight(row, max(self.rowHeight(row), 32))
 
         # apply resize rules
         self.apply_resize_rules()
@@ -250,12 +307,18 @@ class FTableWidget(QTableWidget):
             self.resizeColumnsToContents()
 
     def apply_resize_rules(self):
-        if self.display_fixed:
-            return
-
-        # set headers visibility according to our prop
         self.verticalHeader().setVisible(self.display_vheaders)
         self.horizontalHeader().setVisible(self.display_hheaders)
+
+        name_col = getattr(self, "name_stretch_column", None)
+        if name_col is not None:
+            apply_name_stretch(
+                self, name_col, getattr(self, "name_stretch_fixed", None)
+            )
+            return
+
+        if self.display_fixed:
+            return
 
         self.max_width = self.wc
 

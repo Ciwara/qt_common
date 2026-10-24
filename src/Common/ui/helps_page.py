@@ -27,6 +27,7 @@ class HelpPageWidget(QDialog, FWidget):
     """Widget de page d'aide moderne avec navigation et recherche"""
     
     def __init__(self, parent=None, *args, **kwargs):
+        section = kwargs.pop("section", None)
         QDialog.__init__(self, parent, *args, **kwargs)
         FWidget.__init__(self, parent, *args, **kwargs)
         
@@ -35,6 +36,8 @@ class HelpPageWidget(QDialog, FWidget):
         
         self.init_ui()
         self.load_help_content()
+        if section == "update":
+            self.nav_list.setCurrentRow(1)
     
     def init_ui(self):
         """Initialise l'interface utilisateur"""
@@ -95,6 +98,7 @@ class HelpPageWidget(QDialog, FWidget):
         """Charge le contenu d'aide"""
         sections = [
             ("🏠 Accueil", self.create_home_content),
+            ("🔄 Mise à jour", self.create_update_page),
             ("🚀 Démarrage rapide", self.create_quickstart_content),
             ("👤 Gestion des utilisateurs", self.create_users_help_content),
             ("🔐 Licences", self.create_license_help_content),
@@ -110,8 +114,7 @@ class HelpPageWidget(QDialog, FWidget):
             item.setFont(QFont("Arial", 11))
             self.nav_list.addItem(item)
             
-            # Créer le contenu
-            content_widget = self.create_content_widget(content_func())
+            content_widget = content_func() if title.startswith("🔄") else self.create_content_widget(content_func())
             self.stacked_widget.addWidget(content_widget)
         
         # Sélectionner la première section
@@ -144,6 +147,12 @@ class HelpPageWidget(QDialog, FWidget):
         if index >= 0:
             self.stacked_widget.setCurrentIndex(index)
     
+    def create_update_page(self):
+        """Page interactive de mise à jour."""
+        from .statusbar import AppUpdateWidget
+
+        return AppUpdateWidget(self)
+
     def create_home_content(self):
         """Contenu de la page d'accueil"""
         return f"""
@@ -208,7 +217,7 @@ class HelpPageWidget(QDialog, FWidget):
                     Renseignez les informations de votre organisation dans les paramètres.
                 </li>
                 <li><strong>Création d'utilisateurs</strong><br>
-                    Créez vos comptes utilisateurs depuis le menu Administration.
+                    Créez vos comptes utilisateurs via Paramètres → Administration (onglet Utilisateurs).
                 </li>
                 <li><strong>Personnalisation</strong><br>
                     Configurez les paramètres selon vos besoins (thème, devise, etc.).
@@ -253,8 +262,7 @@ class HelpPageWidget(QDialog, FWidget):
             
             <h2 style="color: #495057; margin-top: 30px;">Créer un utilisateur</h2>
             <ol style="line-height: 2;">
-                <li>Allez dans <strong>Préférences → Gestion Administration</strong></li>
-                <li>Ouvrez l'onglet <strong>"Gestion d'utilisateurs"</strong></li>
+                <li>Allez dans <strong>Paramètres → Administration</strong>, onglet <strong>Utilisateurs</strong></li>
                 <li>Cliquez sur <strong>"➕ Ajouter"</strong></li>
                 <li>Remplissez le formulaire :
                     <ul>
@@ -389,8 +397,7 @@ class HelpPageWidget(QDialog, FWidget):
             <h2 style="color: #495057; margin-top: 30px;">Accéder aux paramètres</h2>
             <p>Les paramètres sont accessibles depuis :</p>
             <ul style="line-height: 2;">
-                <li><strong>Préférences → Gestion Administration</strong> (onglet Paramètre)</li>
-                <li>Raccourci clavier : <code>Ctrl+G</code></li>
+                <li><strong>Paramètres → Préférences</strong> (onglet Paramètre)</li>
             </ul>
             
             <h2 style="color: #495057; margin-top: 30px;">Paramètres disponibles</h2>
@@ -447,6 +454,11 @@ class HelpPageWidget(QDialog, FWidget):
                 <li>Ou utilisez le raccourci <code>Alt+E</code></li>
                 <li>Choisissez l'emplacement de sauvegarde</li>
             </ol>
+            <p>
+                À la fermeture de l'application, une sauvegarde locale est créée automatiquement.
+                L'application propose aussi de copier la base sur une clé USB
+                (même si aucune clé n'est encore branchée : vous pourrez la sélectionner).
+            </p>
             
             <h2 style="color: #495057; margin-top: 30px;">📥 Importer une base de données</h2>
             <p>Pour restaurer une sauvegarde :</p>
@@ -486,7 +498,7 @@ class HelpPageWidget(QDialog, FWidget):
                 <h2 style="color: #495057;">👤 Utilisateurs</h2>
                 
                 <h3 style="color: #6c757d;">Q: Comment réinitialiser un mot de passe oublié ?</h3>
-                <p><strong>R:</strong> Un administrateur peut modifier le mot de passe d'un utilisateur depuis la gestion des utilisateurs.</p>
+                <p><strong>R:</strong> Sur l'écran de connexion, cliquez sur « Mot de passe oublié ? », choisissez votre compte, notez le code à 6 chiffres (valable 1 h), puis saisissez un nouveau mot de passe. Un administrateur peut aussi modifier un mot de passe depuis la gestion des utilisateurs.</p>
                 
                 <h3 style="color: #6c757d; margin-top: 20px;">Q: Puis-je supprimer un utilisateur connecté ?</h3>
                 <p><strong>R:</strong> Non, vous devez d'abord vous déconnecter avant de pouvoir supprimer votre propre compte.</p>

@@ -257,9 +257,54 @@ def _render_pdf_bytes(dict_data: dict) -> bytes:
     return buf.getvalue()
 
 
+def _paint_pdf_on_printer(document, printer) -> None:
+    """Dessine les pages demandées du PDF sur l'imprimante."""
+    from PyQt6.QtCore import QRectF, QSize
+    from PyQt6.QtGui import QPainter
+    from PyQt6.QtPrintSupport import QPrinter
+
+    page_count = document.pageCount()
+    start = 0
+    end = page_count
+    if printer.printRange() == QPrinter.PrintRange.PageRange:
+        start = max(0, int(printer.fromPage() or 1) - 1)
+        last = int(printer.toPage() or page_count)
+        end = min(page_count, max(last, start))
+    if start >= end:
+        raise ValueError("Aucune page à imprimer.")
+
+    try:
+        copies = 1 if printer.supportsMultipleCopies() else max(1, int(printer.copyCount() or 1))
+    except Exception:
+        copies = 1
+
+    painter = QPainter()
+    if not painter.begin(printer):
+        raise RuntimeError("Impossible de démarrer l'impression.")
+    try:
+        for copy in range(copies):
+            for index in range(start, end):
+                if copy or index != start:
+                    printer.newPage()
+                page = printer.pageRect(QPrinter.Unit.DevicePixel)
+                width = max(1, int(page.width()))
+                height = max(1, int(page.height()))
+                longest = max(width, height)
+                if longest > 2400:
+                    scale = 2400 / float(longest)
+                    width = max(1, int(width * scale))
+                    height = max(1, int(height * scale))
+                image = document.render(index, QSize(width, height))
+                if image is None or image.isNull():
+                    continue
+                painter.drawImage(QRectF(0, 0, page.width(), page.height()), image)
+    finally:
+        painter.end()
+
+
 def _show_pdf_preview_dialog(temp_path: str, file_base: str) -> str | None:
     """
-    Aperçu du PDF puis « Enregistrer sous… ».
+    Aperçu du PDF, impression, puis « Enregistrer sous… ».
     Retourne le chemin choisi ou None (annulé).
     """
     try:
@@ -317,12 +362,70 @@ def _show_pdf_preview_dialog(temp_path: str, file_base: str) -> str | None:
         layout.addWidget(btn_ext)
 
     btn_row = QHBoxLayout()
+    btn_print = QPushButton("🖨️ Imprimer")
     btn_save = QPushButton("💾 Enregistrer sous…")
     btn_cancel = QPushButton("Annuler")
     btn_row.addStretch()
+    btn_row.addWidget(btn_print)
     btn_row.addWidget(btn_save)
     btn_row.addWidget(btn_cancel)
     layout.addLayout(btn_row)
+
+    def _print():
+        from PyQt6.QtGui import QPageSize
+        from PyQt6.QtCore import QSizeF
+        from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+        from PyQt6.QtWidgets import QMessageBox
+
+        document = pdf_doc
+        if document is None or document.pageCount() <= 0:
+            try:
+                from PyQt6.QtPdf import QPdfDocument
+
+                document = QPdfDocument(dlg)
+                if document.load(temp_path) != QPdfDocument.Error.None_ or document.pageCount() <= 0:
+                    document = None
+            except Exception:
+                document = None
+        if document is None:
+            QMessageBox.warning(
+                dlg,
+                "Impression",
+                "Impossible de lire le PDF pour l'impression.",
+            )
+            return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setDocName(Path(str(file_base)).stem)
+        try:
+            point = document.pagePointSize(0)
+            if point.width() > 0 and point.height() > 0:
+                printer.setPageSize(
+                    QPageSize(
+                        QSizeF(point.width(), point.height()),
+                        QPageSize.Unit.Point,
+                    )
+                )
+        except Exception:
+            logger.debug("Format de page PDF non repris pour l'impression", exc_info=True)
+
+        dialog = QPrintDialog(printer, dlg)
+        dialog.setWindowTitle("Imprimer")
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            _paint_pdf_on_printer(document, printer)
+        except Exception as error:
+            logger.exception("Impression PDF impossible: %s", error)
+            QMessageBox.critical(
+                dlg,
+                "Impression",
+                "L'impression a échoué.\n\n" f"Détail : {error!s}",
+            )
+            return
+        logger.info("PDF envoyé à l'impression : %s", printer.docName())
+
+    btn_print.clicked.connect(_print)
 
     chosen: list[str | None] = [None]
 

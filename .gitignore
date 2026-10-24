@@ -12,3 +12,4 @@ cmedia/img_media/product/
 logs/app.log
 database.db*
 logs/app.log.1
+src/logs/app.log

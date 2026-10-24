@@ -224,6 +224,7 @@ class CommonMainWindow(QMainWindow, FWindow):
         try:
             self.status_bar = GStatusBar(self)
             self.setStatusBar(self.status_bar)
+            # GStatusBar s'affiche seule si une mise à jour est disponible
             # Enregistrer l'instance pour le nettoyage
             try:
                 from ..cmain import register_statusbar_instance
@@ -408,19 +409,9 @@ class CommonMainWindow(QMainWindow, FWindow):
             logger.error(f"Erreur lors de la déconnexion: {e}")
 
     def exit(self):
-        """Ferme l'application en effectuant les nettoyages nécessaires"""
-        import sys
-        logger.info("Fermeture de l'application")
-        try:
-            settings = Settings.select().where(Settings.id == 1).first()
-            if settings and settings.auth_required:
-                logger.info("Déconnexion avant fermeture")
-                self.logout()
-        except Exception as e:
-            logger.error(f"Erreur lors de la vérification des paramètres: {e}")
-        
+        """Bouton Exit / Quitter : même flux que la fermeture de la fenêtre."""
+        logger.info("Fermeture de l'application (Exit)")
         self.close()
-        sys.exit(0)
 
     def check_session(self):
         """Vérifie la validité de la session active"""
@@ -435,18 +426,28 @@ class CommonMainWindow(QMainWindow, FWindow):
                 self.show_login_dialog()
 
     def closeEvent(self, event):
-        """Override closeEvent pour nettoyer les threads avant fermeture"""
+        """Fermeture (croix / Quitter) : déconnexion + sauvegarde locale/USB + nettoyage."""
         try:
             logger.info("Fermeture de la fenêtre principale - nettoyage des threads")
 
-            # Sauvegarde de la base de données avant fermeture
             try:
-                from ..exports import save_database_on_exit
-                logger.info("💾 Sauvegarde de la base de données avant fermeture...")
-                # Passer self comme parent pour afficher les boîtes de dialogue
-                save_database_on_exit(max_backups=10, parent=self)
-            except Exception as backup_error:
-                logger.warning(f"Impossible d'effectuer la sauvegarde automatique: {backup_error}")
+                settings = Settings.select().where(Settings.id == 1).first()
+                if settings and settings.auth_required:
+                    logger.info("Déconnexion avant fermeture")
+                    self.logout()
+            except Exception as e:
+                logger.error(f"Erreur lors de la déconnexion avant fermeture: {e}")
+
+            if not getattr(self, "_exit_backup_done", False):
+                try:
+                    from ..exports import save_database_on_exit
+                    self._exit_backup_done = True
+                    logger.info("💾 Sauvegarde de la base de données avant fermeture...")
+                    save_database_on_exit(max_backups=10, parent=self)
+                except Exception as backup_error:
+                    logger.warning(
+                        f"Impossible d'effectuer la sauvegarde automatique: {backup_error}"
+                    )
 
             # Sauvegarde finale (au cas où aucun event n'a été capturé pendant le drag)
             try:

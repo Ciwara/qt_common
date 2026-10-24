@@ -3,10 +3,21 @@
 # maintainer: Fad
 # Version 3.0 - Intégration thèmes modernes et améliorations UI
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, Union, Any
 
-from PyQt6.QtCore import QSize, QSortFilterProxyModel, Qt, QBasicTimer, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import (
+    QDate,
+    QDateTime,
+    QSize,
+    QSortFilterProxyModel,
+    Qt,
+    QBasicTimer,
+    pyqtSignal,
+    QTimer,
+    QPropertyAnimation,
+    QEasingCurve,
+)
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -22,6 +33,7 @@ from PyQt6.QtGui import (
     QFontMetrics,
 )
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
     QComboBox,
     QCommandLinkButton,
     QCompleter,
@@ -67,7 +79,7 @@ class FMainWindow(QMainWindow):
         except:
             print("⚠️ Configuration des icônes échouée - mode dégradé activé")
         
-        # StatusBar moderne
+        # Affiche une alerte si une mise à jour est disponible (sinon reste masquée).
         self.statusbar = GStatusBar(self)
         self.setStatusBar(self.statusbar)
         
@@ -79,6 +91,40 @@ class FMainWindow(QMainWindow):
 
     def set_window_title(self, page_name):
         self.setWindowTitle(" > ".join([CConstants.APP_NAME, page_name]))
+
+    def _backup_before_exit(self):
+        """Sauvegarde locale + proposition USB (une seule fois par fermeture)."""
+        if getattr(self, "_exit_backup_done", False):
+            return
+        self._exit_backup_done = True
+        try:
+            from ..exports import save_database_on_exit
+
+            logger.info("💾 Sauvegarde de la base de données avant fermeture...")
+            save_database_on_exit(max_backups=10, parent=self)
+        except Exception as backup_error:
+            logger.warning(
+                "Impossible d'effectuer la sauvegarde automatique: %s",
+                backup_error,
+            )
+
+    def _prepare_application_exit(self):
+        """Même traitement pour Exit et fermeture de la fenêtre (croix)."""
+        logger.info("Préparation de la fermeture de l'application")
+        try:
+            from ..models import Settings
+
+            settings = Settings.select().where(Settings.id == 1).first()
+            if settings and settings.auth_required:
+                self.logout()
+        except Exception as e:
+            logger.error("Erreur lors de la déconnexion avant fermeture: %s", e)
+        self._backup_before_exit()
+
+    def closeEvent(self, event):
+        """Fermeture (croix / Cmd+Q) : même flux que le bouton Exit."""
+        self._prepare_application_exit()
+        super().closeEvent(event)
 
     def set_theme(self, theme_name):
         """
@@ -134,43 +180,34 @@ class FMainWindow(QMainWindow):
             logger.error(f"Erreur lors de la déconnexion: {e}")
 
 
-    def exit(self):   
-        print("Fermeture de l'application")
-        from ..models import Settings
-        settings = Settings.select().where(Settings.id == 1).first()
-        print(settings.auth_required)
-        if settings.auth_required:
-            print("logout")
-            self.logout()
-        import sys
+    def exit(self):
+        """Bouton Exit / Quitter : même flux que la fermeture de la fenêtre."""
+        logger.info("Fermeture de l'application (Exit)")
+        # closeEvent appellera _prepare_application_exit (sauvegarde + USB).
         self.close()
-        sys.exit(0)
 
-    def Notify(self, mssg="👋 Bonjour", type_mssg="info", duration=5000):
+    def Notify(self, mssg="Bonjour", type_mssg="info", duration=5000):
         """
-        Affiche une notification moderne avec émojis
-        
+        Affiche une notification toast (coin supérieur droit).
+
         Args:
-            mssg: Message à afficher
-            type_mssg: Type de notification (success, error, warning, info)
-            duration: Durée d'affichage en millisecondes (0 = permanent, défaut: 5000ms)
+            mssg: Message à afficher (multi-lignes accepté)
+            type_mssg: Type — success, error, warning, info
+            duration: Durée en ms (0 = permanent ; défaut 5000 ;
+                allongé automatiquement pour les messages longs)
         """
         from ..notification import Notification
 
-        # Ajouter des émojis selon le type de message
-        if not any(emoji in mssg for emoji in ["🎉", "✅", "⚠️", "❌", "ℹ️", "💡", "🔔"]):
-            if type_mssg == "success":
-                mssg = f"✅ {mssg}"
-            elif type_mssg == "warning":
-                mssg = f"⚠️ {mssg}"
-            elif type_mssg == "error":
-                mssg = f"❌ {mssg}"
-            elif type_mssg == "info":
-                mssg = f"ℹ️ {mssg}"
-            else:
-                mssg = f"🔔 {mssg}"
+        text = str(mssg or "")
+        # Laisser plus de temps de lecture pour les messages détaillés
+        if duration and duration > 0:
+            extra_lines = text.count("\n")
+            if len(text) > 120 or extra_lines >= 2:
+                duration = max(duration, 8000)
+            if extra_lines >= 4 or len(text) > 220:
+                duration = max(duration, 10000)
 
-        self.notify = Notification(mssg=mssg, type_mssg=type_mssg, duration=duration)
+        self.notify = Notification(mssg=text, type_mssg=type_mssg, duration=duration)
 
 
 class FWidget(QWidget):
@@ -602,6 +639,8 @@ class LineEdit(QLineEdit):
 
     def __init__(self, parent=None):
         QLineEdit.__init__(self, parent)
+        self.setMinimumHeight(32)
+        self.setTextMargins(4, 2, 4, 2)
 
 
 class IntLineEdit(LineEdit):
@@ -656,9 +695,30 @@ class FPeriodHolder(object):
 
 class FormatDate(QDateTimeEdit):
     def __init__(self, *args, **kwargs):
+        args = self._normalize_date_args(args)
         super(FormatDate, self).__init__(*args, **kwargs)
         self.setDisplayFormat("dd/MM/yyyy")
         self.setCalendarPopup(True)
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.setMinimumWidth(140)
+        self.setMinimumHeight(32)
+        if not self.date().isValid():
+            self.setDate(QDate.currentDate())
+
+    @staticmethod
+    def _normalize_date_args(args):
+        if not args:
+            return args
+        value = args[0]
+        if isinstance(value, QDate):
+            return args
+        if isinstance(value, QDateTime):
+            return (value.date(),) + args[1:]
+        if isinstance(value, datetime):
+            return (QDate(value.year, value.month, value.day),) + args[1:]
+        if isinstance(value, date):
+            return (QDate(value.year, value.month, value.day),) + args[1:]
+        return args
 
 
 class FPeriodTabBar(TabPane):

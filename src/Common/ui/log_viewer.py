@@ -27,10 +27,11 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QGroupBox,
     QFileDialog,
+    QTabWidget,
 )
 
 from .common import FWidget, Button
-from ..cstatic import logger
+from ..cstatic import LOG_FILE, log_dir, logger
 
 
 class LogHighlighter(QSyntaxHighlighter):
@@ -83,6 +84,18 @@ class LogHighlighter(QSyntaxHighlighter):
                 logger.debug(f"Erreur lors du highlighting: {e}")
 
 
+class _LogTab:
+    """Un onglet = un fichier de log."""
+
+    def __init__(self, path, editor, highlighter):
+        self.path = path
+        self.editor = editor
+        self.highlighter = highlighter
+        self.raw_logs = ""
+        self.all_log_lines = []
+        self.loaded = False
+
+
 class LogViewerWidget(QDialog, FWidget):
     """Widget amélioré pour visualiser les logs de l'application"""
     
@@ -99,9 +112,7 @@ class LogViewerWidget(QDialog, FWidget):
         self.resize(1400, 800)
         
         # Variables d'état
-        self.log_file_path = None
-        self.raw_logs = ""
-        self.all_log_lines = []
+        self._tabs = []
         self.log_stats = {}
         self.current_search_index = -1
         self.search_matches = []
@@ -114,7 +125,7 @@ class LogViewerWidget(QDialog, FWidget):
         self.refresh_timer.timeout.connect(self.refresh_logs)
         
         self.init_ui()
-        self.load_log_file_path()
+        self.populate_log_tabs()
         self.refresh_logs()
     
     def init_ui(self):
@@ -146,7 +157,6 @@ class LogViewerWidget(QDialog, FWidget):
         self.level_filter = QComboBox()
         self.level_filter.addItems(["Tous", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
         self.level_filter.currentTextChanged.connect(self.filter_logs)
-        self.level_filter.setMinimumWidth(100)
         toolbar.addWidget(self.level_filter)
         
         # Filtre par date
@@ -165,7 +175,6 @@ class LogViewerWidget(QDialog, FWidget):
         toolbar.addWidget(QLabel("🔍 Rechercher:"))
         self.search_field = QLineEdit()
         self.search_field.setPlaceholderText("Rechercher dans les logs...")
-        self.search_field.setMinimumWidth(200)
         self.search_field.textChanged.connect(self.on_search_changed)
         self.search_field.returnPressed.connect(self.search_next)
         toolbar.addWidget(self.search_field)
@@ -173,14 +182,12 @@ class LogViewerWidget(QDialog, FWidget):
         # Navigation de recherche
         self.search_prev_btn = Button("⬆️")
         self.search_prev_btn.setToolTip("Résultat précédent")
-        self.search_prev_btn.setMaximumWidth(40)
         self.search_prev_btn.clicked.connect(self.search_previous)
         self.search_prev_btn.setEnabled(False)
         toolbar.addWidget(self.search_prev_btn)
         
         self.search_next_btn = Button("⬇️")
         self.search_next_btn.setToolTip("Résultat suivant")
-        self.search_next_btn.setMaximumWidth(40)
         self.search_next_btn.clicked.connect(self.search_next)
         self.search_next_btn.setEnabled(False)
         toolbar.addWidget(self.search_next_btn)
@@ -194,7 +201,6 @@ class LogViewerWidget(QDialog, FWidget):
         # Contrôles de zoom
         toolbar.addWidget(QLabel("🔍 Zoom:"))
         self.zoom_out_btn = Button("➖")
-        self.zoom_out_btn.setMaximumWidth(35)
         self.zoom_out_btn.setToolTip("Réduire la taille de police")
         self.zoom_out_btn.clicked.connect(self.zoom_out)
         toolbar.addWidget(self.zoom_out_btn)
@@ -205,7 +211,6 @@ class LogViewerWidget(QDialog, FWidget):
         toolbar.addWidget(self.zoom_label)
         
         self.zoom_in_btn = Button("➕")
-        self.zoom_in_btn.setMaximumWidth(35)
         self.zoom_in_btn.setToolTip("Augmenter la taille de police")
         self.zoom_in_btn.clicked.connect(self.zoom_in)
         toolbar.addWidget(self.zoom_in_btn)
@@ -261,19 +266,14 @@ class LogViewerWidget(QDialog, FWidget):
         stats_group.setLayout(stats_layout)
         main_layout.addWidget(stats_group)
         
-        # ========== ZONE DE LOGS ==========
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        self.log_text.setFont(QFont("Courier New", self.font_size))
-        self.log_text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        # ========== ONGLETS DES FICHIERS DE LOG ==========
+        self.log_tabs = QTabWidget()
+        self.log_tabs.setDocumentMode(True)
+        self.log_tabs.setTabsClosable(False)
+        self.log_tabs.currentChanged.connect(self.on_log_tab_changed)
+        main_layout.addWidget(self.log_tabs)
         
-        # Configuration des couleurs pour les niveaux de log
         self.setup_text_formats()
-        
-        # Ajouter le highlighter
-        self.highlighter = LogHighlighter(self.log_text.document())
-        
-        main_layout.addWidget(self.log_text)
         
         # ========== BARRE DE STATUT ==========
         status_layout = QHBoxLayout()
@@ -338,54 +338,185 @@ class LogViewerWidget(QDialog, FWidget):
         self.formats['CRITICAL'].setForeground(QColor(139, 0, 0))
         self.formats['CRITICAL'].setFontWeight(QFont.Weight.Bold)
         self.formats['CRITICAL'].setBackground(QColor(255, 200, 200))
-    
+
+    def _current_tab(self):
+        idx = self.log_tabs.currentIndex() if hasattr(self, "log_tabs") else -1
+        if 0 <= idx < len(self._tabs):
+            return self._tabs[idx]
+        return None
+
+    @property
+    def log_text(self):
+        tab = self._current_tab()
+        return tab.editor if tab else None
+
+    @property
+    def highlighter(self):
+        tab = self._current_tab()
+        return tab.highlighter if tab else None
+
+    @property
+    def log_file_path(self):
+        tab = self._current_tab()
+        return tab.path if tab else None
+
+    @log_file_path.setter
+    def log_file_path(self, value):
+        tab = self._current_tab()
+        if tab is not None:
+            tab.path = Path(value) if value else None
+
+    @property
+    def raw_logs(self):
+        tab = self._current_tab()
+        return tab.raw_logs if tab else ""
+
+    @raw_logs.setter
+    def raw_logs(self, value):
+        tab = self._current_tab()
+        if tab is not None:
+            tab.raw_logs = value or ""
+
+    @property
+    def all_log_lines(self):
+        tab = self._current_tab()
+        return tab.all_log_lines if tab else []
+
+    @all_log_lines.setter
+    def all_log_lines(self, value):
+        tab = self._current_tab()
+        if tab is not None:
+            tab.all_log_lines = value or []
+
+    def _tab_title(self, path):
+        name = path.name
+        if re.search(r"\.log\.\d+$", name, re.I):
+            return f"{name}  (archive)"
+        if name.lower() == "app.log":
+            return "app.log  (actuel)"
+        return name
+
+    def _discover_log_files(self):
+        files = []
+        seen = set()
+        dirs = []
+        if log_dir:
+            dirs.append(Path(log_dir))
+        cwd_logs = Path.cwd() / "logs"
+        dirs.append(cwd_logs)
+        for folder in dirs:
+            try:
+                folder = folder.resolve()
+            except OSError:
+                continue
+            if not folder.is_dir():
+                continue
+            try:
+                candidates = list(folder.iterdir())
+            except OSError:
+                continue
+            for path in candidates:
+                if not path.is_file():
+                    continue
+                name = path.name
+                if not (name.endswith(".log") or re.search(r"\.log\.\d+$", name)):
+                    continue
+                try:
+                    key = str(path.resolve())
+                except OSError:
+                    key = str(path)
+                if key in seen:
+                    continue
+                seen.add(key)
+                files.append(path)
+        def sort_key(path):
+            name = path.name.lower()
+            is_current = False
+            try:
+                is_current = LOG_FILE and path.resolve() == Path(LOG_FILE).resolve()
+            except OSError:
+                is_current = False
+            archive = 2 if re.search(r"\.log\.\d+$", name) else 1
+            return (0 if is_current else archive, name)
+        files.sort(key=sort_key)
+        if not files and LOG_FILE:
+            files.append(Path(LOG_FILE))
+        return files
+
+    def _add_log_tab(self, path, switch=False):
+        path = Path(path)
+        for i, tab in enumerate(self._tabs):
+            try:
+                if tab.path and tab.path.resolve() == path.resolve():
+                    if switch:
+                        self.log_tabs.setCurrentIndex(i)
+                    return tab
+            except OSError:
+                if tab.path and tab.path == path:
+                    if switch:
+                        self.log_tabs.setCurrentIndex(i)
+                    return tab
+        editor = QTextEdit()
+        editor.setReadOnly(True)
+        editor.setFont(QFont("Courier New", self.font_size))
+        editor.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        highlighter = LogHighlighter(editor.document())
+        tab = _LogTab(path, editor, highlighter)
+        self._tabs.append(tab)
+        self.log_tabs.addTab(editor, self._tab_title(path))
+        self.log_tabs.setTabToolTip(self.log_tabs.count() - 1, str(path))
+        if switch:
+            self.log_tabs.setCurrentIndex(self.log_tabs.count() - 1)
+        return tab
+
+    def populate_log_tabs(self):
+        """Crée un onglet par fichier de log trouvé."""
+        self.log_tabs.blockSignals(True)
+        while self.log_tabs.count():
+            self.log_tabs.removeTab(0)
+        self._tabs = []
+        for path in self._discover_log_files():
+            self._add_log_tab(path, switch=False)
+        self.log_tabs.blockSignals(False)
+        if self._tabs:
+            self.log_tabs.setCurrentIndex(0)
+
+    def on_log_tab_changed(self, index):
+        tab = self._current_tab()
+        if tab is None:
+            return
+        if not tab.loaded:
+            self.refresh_logs()
+        else:
+            self.calculate_stats()
+            self.filter_logs()
+            self.update_font_size()
+
     def load_log_file_path(self):
-        """Charge le chemin du fichier log"""
-        try:
-            log_dir = Path(__file__).parent.parent.parent / 'logs'
-            log_dir.mkdir(exist_ok=True)
-            self.log_file_path = log_dir / 'app.log'
-            
-            if not self.log_file_path.exists():
-                backup_files = sorted(
-                    [f for f in log_dir.glob('app.log.*') if f.is_file()],
-                    key=lambda x: x.stat().st_mtime,
-                    reverse=True
-                )
-                if backup_files:
-                    self.log_file_path = backup_files[0]
-                    logger.debug(f"Utilisation du fichier de backup: {self.log_file_path}")
-            
-            if not self.log_file_path.exists():
-                current_dir_log = Path.cwd() / 'logs' / 'app.log'
-                if current_dir_log.exists():
-                    self.log_file_path = current_dir_log
-                else:
-                    logger.warning(f"Fichier de log introuvable dans {log_dir}")
-                    
-        except Exception as e:
-            logger.error(f"Erreur lors du chargement du chemin du log: {e}")
-            self.log_file_path = None
-    
+        """Conserve un fichier courant si aucun onglet n'existe encore."""
+        if self._tabs:
+            return
+        self.populate_log_tabs()
+
     def select_log_file(self):
-        """Permet de sélectionner un autre fichier de log"""
-        log_dir = Path(__file__).parent.parent.parent / 'logs'
-        if not log_dir.exists():
-            log_dir = Path.cwd() / 'logs'
+        """Permet d'ouvrir un autre fichier de log dans un nouvel onglet"""
+        start_dir = log_dir if log_dir and Path(log_dir).exists() else Path.cwd() / "logs"
         
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Sélectionner un fichier de log",
-            str(log_dir),
+            str(start_dir),
             "Fichiers de log (*.log *.txt);;Tous les fichiers (*)"
         )
         
         if file_path:
-            self.log_file_path = Path(file_path)
+            self._add_log_tab(Path(file_path), switch=True)
             self.refresh_logs()
     
     def refresh_logs(self):
         """Charge et affiche les logs avec gestion des gros fichiers"""
+        if self.log_text is None:
+            return
         if not self.log_file_path or not self.log_file_path.exists():
             self.log_text.setPlainText(
                 f"❌ Fichier de log introuvable.\n\n"
@@ -437,6 +568,9 @@ class LogViewerWidget(QDialog, FWidget):
             
             # Mettre à jour le statut
             self.update_status()
+            tab = self._current_tab()
+            if tab:
+                tab.loaded = True
             
         except Exception as e:
             logger.error(f"Erreur lors du chargement normal: {e}")
@@ -480,6 +614,9 @@ class LogViewerWidget(QDialog, FWidget):
             self.status_label.setText(
                 f"⚠️ Fichier volumineux - Affichage des {len(lines)} dernières lignes"
             )
+            tab = self._current_tab()
+            if tab:
+                tab.loaded = True
             
         except Exception as e:
             logger.error(f"Erreur lors du chargement du gros fichier: {e}")
@@ -512,7 +649,7 @@ class LogViewerWidget(QDialog, FWidget):
     
     def update_status(self):
         """Met à jour la barre de statut"""
-        if not self.log_file_path or not self.log_file_path.exists():
+        if not self.log_file_path or not self.log_file_path.exists() or self.log_text is None:
             return
         
         try:
@@ -533,6 +670,8 @@ class LogViewerWidget(QDialog, FWidget):
     
     def filter_logs(self):
         """Filtre les logs selon les critères sélectionnés"""
+        if self.log_text is None:
+            return
         if not hasattr(self, 'all_log_lines') or not self.all_log_lines:
             return
         
@@ -582,10 +721,11 @@ class LogViewerWidget(QDialog, FWidget):
             displayed_count += 1
         
         # Mettre à jour le highlighter
-        if search_text:
-            self.highlighter.set_search_pattern(search_text)
-        else:
-            self.highlighter.set_search_pattern(None)
+        if self.highlighter is not None:
+            if search_text:
+                self.highlighter.set_search_pattern(search_text)
+            else:
+                self.highlighter.set_search_pattern(None)
         
         # Scroll vers le bas si c'était le cas avant
         if was_at_bottom and self.auto_scroll_cb.isChecked():
@@ -629,6 +769,8 @@ class LogViewerWidget(QDialog, FWidget):
         """Appelé quand le texte de recherche change"""
         self.current_search_index = -1
         self.search_matches = []
+        if self.log_text is None:
+            return
         
         if text:
             # Trouver toutes les occurrences
@@ -638,7 +780,8 @@ class LogViewerWidget(QDialog, FWidget):
                 self.search_matches.append(match.start())
             
             # Mettre à jour le highlighter
-            self.highlighter.set_search_pattern(text)
+            if self.highlighter is not None:
+                self.highlighter.set_search_pattern(text)
             
             # Mettre à jour les boutons de navigation
             count = len(self.search_matches)
@@ -649,7 +792,8 @@ class LogViewerWidget(QDialog, FWidget):
             if count > 0:
                 self.search_next()  # Aller au premier résultat
         else:
-            self.highlighter.set_search_pattern(None)
+            if self.highlighter is not None:
+                self.highlighter.set_search_pattern(None)
             self.search_count_label.setText("")
             self.search_prev_btn.setEnabled(False)
             self.search_next_btn.setEnabled(False)
@@ -703,7 +847,8 @@ class LogViewerWidget(QDialog, FWidget):
     def update_font_size(self):
         """Met à jour la taille de police"""
         font = QFont("Courier New", self.font_size)
-        self.log_text.setFont(font)
+        if self.log_text is not None:
+            self.log_text.setFont(font)
         self.zoom_label.setText(f"{self.font_size}pt")
     
     def on_max_lines_changed(self, value):
@@ -731,13 +876,14 @@ class LogViewerWidget(QDialog, FWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.log_text.clear()
+            if self.log_text is not None:
+                self.log_text.clear()
             self.status_label.setText("📋 Affichage effacé")
             self.update_stats({})
     
     def export_logs(self):
         """Exporte les logs affichés dans un fichier"""
-        if not hasattr(self, 'raw_logs'):
+        if self.log_text is None or not self.log_text.toPlainText().strip():
             QMessageBox.warning(self, "Export", "Aucun log à exporter")
             return
         

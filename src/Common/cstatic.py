@@ -6,6 +6,7 @@
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
@@ -13,9 +14,33 @@ from logging.handlers import RotatingFileHandler
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Création du dossier logs s'il n'existe pas
-log_dir = Path(__file__).parent.parent.parent / 'logs'
-log_dir.mkdir(exist_ok=True)
+
+def _resolve_log_dir():
+    """Dossier des logs : à côté de l'exe (installé) ou du script lancé (dev)."""
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+    else:
+        argv0 = sys.argv[0] if sys.argv else ""
+        base = None
+        if argv0:
+            try:
+                script = Path(argv0).resolve()
+                if script.is_file():
+                    base = script.parent
+            except OSError:
+                base = None
+        if base is None:
+            base = Path.cwd()
+    d = base / "logs"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        d = Path.cwd() / "logs"
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+log_dir = _resolve_log_dir()
 
 # Configuration du format des logs
 formatter = logging.Formatter(
@@ -52,19 +77,26 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
 
 # Handler pour le fichier de log (uniquement infos de démarrage et erreurs)
-file_handler = RotatingFileHandler(
-    log_dir / 'app.log',
-    maxBytes=1024*1024,  # 1MB
-    backupCount=5,
-    encoding='utf-8'
-)
-file_handler.setLevel(logging.INFO)  # Niveau INFO pour capturer les infos de démarrage
-file_handler.addFilter(StartupLogFilter())  # Filtrer pour ne garder que les logs de démarrage
-file_handler.setFormatter(formatter)
+LOG_FILE = log_dir / 'app.log'
+try:
+    file_handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=1024*1024,  # 1MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.INFO)  # Niveau INFO pour capturer les infos de démarrage
+    file_handler.addFilter(StartupLogFilter())  # Filtrer pour ne garder que les logs de démarrage
+    file_handler.setFormatter(formatter)
+except OSError:
+    file_handler = None
 
 # Ajout des handlers au logger
 logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+if file_handler is not None:
+    logger.addHandler(file_handler)
+
+logger.info("Fichier de log: %s", LOG_FILE)
 
 # Configuration du logger Peewee pour réduire les logs DEBUG SQL
 peewee_logger = logging.getLogger('peewee')
@@ -175,6 +207,8 @@ APP_LOGO_ICO = os.path.join(img_media, "logo.ico")
 ExportFolders = []
 ExportFiles = []
 BASE_URL = "https://file-repo.ml"
+# Si le serveur distant ne répond pas, essayer ce serveur de développement local.
+LOCAL_DEV_URL = "http://127.0.0.1:8001"
 
 # Contrôle de licence au démarrage. False = pas de fenêtre d'activation (install / démo).
 # Peut aussi être désactivé sans recompiler : variable d'environnement COMMON_SKIP_LICENSE=1
@@ -242,6 +276,7 @@ class CConstants:
     ExportFolders = ExportFolders
     ExportFiles = ExportFiles
     BASE_URL = BASE_URL
+    LOCAL_DEV_URL = LOCAL_DEV_URL
     LICENSE_REQUIRED = LICENSE_REQUIRED
     BACKUP_TO_USB = BACKUP_TO_USB
 

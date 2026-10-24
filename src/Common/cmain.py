@@ -23,6 +23,12 @@ if __name__ == "__main__":
 from PyQt6.QtWidgets import QDialog, QApplication
 
 from . import gettext_windows
+from .crash_handler import (
+    SafeApplication,
+    install_exception_hooks,
+    report_uncaught_exception,
+    show_startup_error,
+)
 from .cstatic import CConstants, license_required, logger
 from .models import Organization, Owner, Settings, init_database, dbh
 from .ui.license_view import LicenseViewWidget
@@ -33,24 +39,70 @@ from .migrations import run_migrations
 from .migrations.migration_tracker import MigrationTracker
 
 from .ui.user_add_or_edit import NewOrEditUserViewWidget
-from .ui.util import is_valide_mac
+from .server import Network
+from .ui.util import is_valide_mac, request_online_license
 from .ui.window import FWindow
+
+
+def _schedule_launch_report():
+    """Inscription / desktop_client après affichage de la fenêtre (thread hors UI)."""
+    if not getattr(CConstants, "SERV", False):
+        return
+    try:
+        from PyQt6.QtCore import QThread, QTimer, pyqtSignal
+    except Exception:
+        return
+
+    class _LaunchReportThread(QThread):
+        done = pyqtSignal(object)
+
+        def run(self):
+            try:
+                self.done.emit(Network().report_launch())
+            except Exception as exc:
+                self.done.emit({"ok": False, "message": str(exc)})
+
+    def _start():
+        thread = _LaunchReportThread()
+        app = QApplication.instance()
+        if app is not None:
+            # Garder une référence tant que le thread tourne
+            if not hasattr(app, "_launch_report_threads"):
+                app._launch_report_threads = []
+            app._launch_report_threads.append(thread)
+
+            def _done(rep):
+                try:
+                    logger.info(
+                        "Connexion serveur au lancement : %s",
+                        rep.get("message") if isinstance(rep, dict) else rep,
+                    )
+                finally:
+                    try:
+                        app._launch_report_threads.remove(thread)
+                    except (ValueError, AttributeError):
+                        pass
+
+            thread.done.connect(_done)
+        thread.start()
+
+    QTimer.singleShot(300, _start)
+
 
 def cleanup():
     """Fonction de nettoyage appelée à la fermeture de l'application"""
     try:
-        logger.info("💾 Sauvegarde de la base de données avant fermeture...")
-        # Sauvegarder la base de données avant de la fermer.
-        # IMPORTANT: `atexit` peut être appelé quand QApplication est déjà détruite,
-        # donc aucune UI (QMessageBox/QFileDialog) ne doit être invoquée ici.
+        # Sauvegarde déjà faite via closeEvent / Exit (avec proposition USB).
+        # Ici : filet de sécurité silencieux seulement si rien n'a été fait.
         try:
-            app = QApplication.instance()
-            if app is not None:
-                from .exports import save_database_on_exit
-                # parent=None: pas de fenêtre, mais QApplication existe encore
-                save_database_on_exit(max_backups=10, parent=None)
+            from .exports import exit_backup_already_done, save_database_on_exit
+
+            if exit_backup_already_done():
+                logger.info("Sauvegarde de fermeture déjà effectuée (UI)")
             else:
-                logger.info("QApplication déjà fermée: sauvegarde UI ignorée")
+                logger.info("💾 Sauvegarde de secours de la base de données...")
+                # parent=None: pas de dialogue (atexit / QApplication peut être détruite)
+                save_database_on_exit(max_backups=10, parent=None)
         except Exception as backup_error:
             logger.warning(f"Impossible d'effectuer la sauvegarde automatique: {backup_error}")
         
@@ -186,6 +238,8 @@ def handle_initial_conditions(window):
 
         # Vérification de la licence (désactivable : COMMON_SKIP_LICENSE ou LICENSE_REQUIRED=False)
         if license_required():
+            online = request_online_license()
+            logger.info("Demande de licence en ligne : %s", online.get("message"))
             license_status = is_valide_mac()[1]
             if license_status != CConstants.OK:
                 logger.debug(f"Vérification de la licence - Statut: {license_status}")
@@ -237,30 +291,36 @@ def handle_initial_conditions(window):
                     window.refresh_menu_after_login()
             else:
                 logger.warning("⚠️ Aucun utilisateur actif trouvé pour la connexion automatique")
-        
+
         logger.info("Toutes les conditions initiales sont satisfaites")
         window.showMaximized()
+        # Contact serveur en arrière-plan : ne jamais bloquer l'affichage (Windows hors ligne).
+        _schedule_launch_report()
         return True
 
     except Exception as e:
         logger.error(f"Erreur lors de la vérification des conditions initiales: {e}")
+        report_uncaught_exception(sys.exc_info(), continue_app=False)
         return False
 
 def cmain(test=False):
     logger.info("Démarrage de l'application")
+    install_exception_hooks()
     
     try:
         # Initialisation de l'application Qt
-        app = QApplication(sys.argv)
+        app = SafeApplication(sys.argv)
         
         # Initialisation de la base de données
         if not init_database():
             logger.error("Impossible d'initialiser la base de données")
+            show_startup_error("Impossible d'initialiser la base de données.")
             return False
             
         # Vérification de la connexion à la base de données
         if dbh is None:
             logger.error("La base de données n'est pas initialisée")
+            show_startup_error("La base de données n'est pas initialisée.")
             return False
             
         if dbh.is_closed():
@@ -270,9 +330,17 @@ def cmain(test=False):
         # Vérification et exécution des migrations
         if not check_and_run_migrations():
             logger.error("Impossible de vérifier ou d'appliquer les migrations")
+            show_startup_error("Impossible de vérifier ou d'appliquer les migrations.")
             return False
 
         ensure_application_database_tables()
+
+        try:
+            from .ui.util import remember_machine
+
+            remember_machine()
+        except Exception as e:
+            logger.warning("Identifiant machine non mémorisé: %s", e)
 
         if dbh is not None and dbh.is_closed():
             logger.info("Connexion à la base de données (post-migrations)")
@@ -309,6 +377,7 @@ def cmain(test=False):
 
         if window is None:
             logger.error("Aucune fenêtre n'a pu être initialisée")
+            show_startup_error("Aucune fenêtre n'a pu être initialisée.")
             return False
 
         # Ne court-circuiter la connexion / licence qu'en mode `test` unitaire.
@@ -325,4 +394,5 @@ def cmain(test=False):
 
     except Exception as e:
         logger.error(f"Erreur lors du démarrage de l'application: {e}")
+        report_uncaught_exception(sys.exc_info(), continue_app=False)
         return False

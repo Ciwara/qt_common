@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QPushButton,
     QSizePolicy,
     QSpinBox,
     QSplitter,
@@ -51,12 +52,23 @@ def _(text):
     """Fonction d'internationalisation simple - peut être remplacée par gettext"""
     return text
 
-class AdminViewWidget(FWidget):
-    """Onglets administration : paramètres, corbeille, comptes utilisateurs."""
 
-    TAB_SETTINGS = 0
-    TAB_HISTORY = 1
-    TAB_USERS = 2
+def _compact_button(text):
+    """Bouton de hauteur fixe : QCommandLinkButton s'étire sur toute la zone."""
+    btn = QPushButton(text)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setFixedHeight(32)
+    btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+    return btn
+
+class AdminViewWidget(FWidget):
+    """Onglets administration : historique et comptes utilisateurs.
+
+    Les paramètres applicatifs sont dans Préférences → Paramètre.
+    """
+
+    TAB_HISTORY = 0
+    TAB_USERS = 1
 
     def __init__(self, parent=None, initial_tab=0, *args, **kwargs):
         super(AdminViewWidget, self).__init__(parent=parent, *args, **kwargs)
@@ -79,18 +91,12 @@ class AdminViewWidget(FWidget):
         self.history_table = TrashTableWidget(parent=self)
         history_table.addWidget(self.history_table)
 
-        # Layout séparé pour les paramètres
-        table_settings = QVBoxLayout()
-        self.table_settings = SettingsTableWidget(parent=self)
-        table_settings.addWidget(self.table_settings)
-
         # Layout séparé pour la gestion des utilisateurs
         table_login = QVBoxLayout()
         self.table_login = LoginManageWidget(parent=self)
         table_login.addWidget(self.table_login)
 
         tab_widget = tabbox(
-            (table_settings, "Paramètre"),
             (history_table, "Historique"),
             (table_login, "Utilisateurs"),
         )
@@ -253,12 +259,9 @@ class OrganizationTableWidget(FWidget):
         self.logo_orga = LineEdit(str(self.organization.logo_orga or ""))
         self.name_orga = LineEdit(str(self.organization.name_orga or ""))
         self.phone = IntLineEdit(str(self.organization.phone or "0"))
-        self.phone.setMaximumWidth(250)
         self.bp = LineEdit(str(self.organization.bp or ""))
-        self.bp.setMaximumWidth(250)
         self.adress_org = QTextEdit(str(self.organization.adress_org or ""))
         self.email_org = LineEdit(str(self.organization.email_org or ""))
-        self.email_org.setMaximumWidth(250)
 
         formbox = QFormLayout()
         formbox.addRow(self.bn_upload, self.logo_orga)
@@ -324,35 +327,41 @@ class LoginManageWidget(FWidget):
         users_list_widget.setSpacing(10)
 
         intro = QLabel(
-            "Créez des comptes, attribuez le rôle <b>Administrateur</b> ou "
-            "<b>Utilisateur</b>, activez ou désactivez l’accès à l’application. "
-            "Les comptes <i>superuser</i> ne sont pas affichés ici."
+            "Créez des comptes, choisissez le rôle, puis activez ou désactivez "
+            "l’accès. Un double-clic ouvre la fiche. Les comptes techniques "
+            "superuser ne sont pas listés."
         )
         intro.setWordWrap(True)
         intro.setStyleSheet(
-            "color: #34495e; padding: 8px 4px; font-size: 13px; "
-            "background-color: #ecf0f1; border-radius: 6px;"
+            "color: palette(window-text); padding: 8px 10px; font-size: 13px; "
+            "background-color: palette(alternate-base); border-radius: 8px;"
         )
         users_list_widget.addWidget(intro)
 
-        # Barre de recherche
         search_layout = QHBoxLayout()
-        search_label = QLabel("Rechercher :")
         self.search_field = LineEdit()
         self.search_field.setPlaceholderText("Identifiant, téléphone ou rôle…")
         self.search_field.setClearButtonEnabled(True)
         self.search_field.textChanged.connect(self.filter_users)
-        search_layout.addWidget(search_label)
+        self.filter_box = QComboBox()
+        self.filter_box.addItem("Tous", "all")
+        self.filter_box.addItem("Actifs", "active")
+        self.filter_box.addItem("Inactifs", "inactive")
+        self.filter_box.addItem("Administrateurs", "admin")
+        self.filter_box.currentIndexChanged.connect(
+            lambda *_: self.filter_users(self.search_field.text())
+        )
         search_layout.addWidget(self.search_field, 1)
+        search_layout.addWidget(self.filter_box)
         users_list_widget.addLayout(search_layout)
 
-        # Statistiques
         self.stats_label = QLabel()
         self.stats_label.setWordWrap(True)
         self.stats_label.setTextFormat(Qt.TextFormat.RichText)
         self.stats_label.setStyleSheet(
-            "font-weight: 600; color: #2c3e50; padding: 8px 6px; "
-            "background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;"
+            "font-weight: 600; color: palette(window-text); padding: 8px 10px; "
+            "background-color: palette(base); border: 1px solid palette(mid); "
+            "border-radius: 8px;"
         )
         users_list_widget.addWidget(self.stats_label)
 
@@ -372,7 +381,6 @@ class LoginManageWidget(FWidget):
         # Widget d'information et opérations
         self.table_info = InfoTableWidget(parent=self)
         self.operation = OperationWidget(parent=self)
-        self.operation.setMinimumHeight(72)
 
         splitterH = QSplitter(Qt.Orientation.Horizontal)
         splitterH.addWidget(users_container)
@@ -380,41 +388,68 @@ class LoginManageWidget(FWidget):
         splitterV = QSplitter(Qt.Orientation.Vertical)
         splitterV.addWidget(self.operation)
         splitterV.addWidget(self.table_info)
+        splitterV.setStretchFactor(0, 0)
+        splitterV.setStretchFactor(1, 1)
+        splitterV.setSizes([44, 400])
         splitterH.addWidget(splitterV)
         vbox = QHBoxLayout(self)
         vbox.addWidget(splitterH)
         self.setLayout(vbox)
         
-        # Mettre à jour les statistiques
         self.update_stats()
+        self.filter_users(self.search_field.text())
     
-    def filter_users(self, text):
-        """Filtre les utilisateurs selon le texte de recherche"""
-        search_text = text.lower().strip()
+    def filter_users(self, text=""):
+        """Filtre les comptes selon la recherche et le filtre d'état."""
+        if not hasattr(self, "table_owner"):
+            return
+        search_text = (text or "").lower().strip()
+        kind = "all"
+        if getattr(self, "filter_box", None) is not None:
+            kind = self.filter_box.currentData() or "all"
+        first_visible = None
         for i in range(self.table_owner.count()):
             item = self.table_owner.item(i)
-            if item:
-                # Toujours afficher l'en-tête
-                if isinstance(item, OwnerQListWidgetItem) and isinstance(item.owner, int):
-                    item.setHidden(False)
-                elif isinstance(item, OwnerQListWidgetItem):
-                    owner = item.owner
-                    if owner:
-                        # Rechercher dans le nom d'utilisateur, téléphone, groupe
-                        username_match = owner.username.lower() if owner.username else ""
-                        phone_match = owner.phone.lower() if owner.phone else ""
-                        group_match = (
-                            (owner.group or "").lower()
-                            if isinstance(owner.group, str)
-                            else str(owner.group or "").lower()
-                        )
-                        
-                        matches = (
-                            search_text in username_match or
-                            search_text in phone_match or
-                            search_text in group_match
-                        )
-                        item.setHidden(not matches)
+            if not isinstance(item, OwnerQListWidgetItem) or isinstance(item.owner, int):
+                continue
+            owner = item.owner
+            if owner is None:
+                item.setHidden(True)
+                continue
+            username_match = (owner.username or "").lower()
+            phone_match = str(owner.phone or "").lower()
+            group_match = str(owner.group or "").lower()
+            matches_text = (
+                not search_text
+                or search_text in username_match
+                or search_text in phone_match
+                or search_text in group_match
+            )
+            if kind == "active":
+                matches_kind = bool(owner.isactive)
+            elif kind == "inactive":
+                matches_kind = not owner.isactive
+            elif kind == "admin":
+                matches_kind = owner.group == Owner.ADMIN
+            else:
+                matches_kind = True
+            hidden = not (matches_text and matches_kind)
+            item.setHidden(hidden)
+            if not hidden and first_visible is None:
+                first_visible = item
+        if getattr(self, "table_info", None) is None:
+            return
+        current = self.table_owner.currentItem()
+        if first_visible is not None and (current is None or current.isHidden()):
+            self.table_owner.setCurrentItem(first_visible)
+        elif first_visible is None:
+            self.table_owner.clearSelection()
+            self.table_info.edit_ow_but.setEnabled(False)
+            self.table_info.delete_ow_but.setEnabled(False)
+            self.table_info.toggle_active_but.setEnabled(False)
+            self.table_info.details.setText(
+                "<p style='padding:12px;'>Aucun compte ne correspond à ce filtre.</p>"
+            )
     
     def update_stats(self):
         """Met à jour les statistiques des utilisateurs"""
@@ -448,27 +483,24 @@ class OperationWidget(FWidget):
         super(FWidget, self).__init__(parent=parent, *args, **kwargs)
 
         vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(0, 0, 0, 0)
         hbox = QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
         self.parent = parent
+        self.setFixedHeight(40)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-        # Bouton ajouter utilisateur
-        self.add_ow_but = Button(_("Nouvel utilisateur"))
-        self.add_ow_but.setIcon(
-            QIcon.fromTheme("", QIcon("{}useradd.png".format(CConstants.img_cmedia)))
-        )
+        self.add_ow_but = _compact_button(_("Nouvel utilisateur"))
         self.add_ow_but.setToolTip("Créer un nouvel utilisateur")
         self.add_ow_but.clicked.connect(self.add_owner)
         hbox.addWidget(self.add_ow_but)
-        
-        # Bouton rafraîchir
-        self.refresh_but = Button(_("Actualiser la liste"))
-        self.refresh_but.setIcon(
-            QIcon.fromTheme("", QIcon("{}find.png".format(CConstants.img_cmedia)))
-        )
+
+        self.refresh_but = _compact_button(_("Actualiser"))
         self.refresh_but.setToolTip("Actualiser la liste des utilisateurs")
         self.refresh_but.clicked.connect(self.refresh_list)
         hbox.addWidget(self.refresh_but)
-        
+        hbox.addStretch(1)
+
         vbox.addLayout(hbox)
         self.setLayout(vbox)
 
@@ -495,29 +527,58 @@ class OwnerTableWidget(QListWidget):
         self.parent = parent
         self.setAutoScroll(True)
         self.setAutoFillBackground(True)
+        self.setWordWrap(True)
+        self.setSpacing(2)
+        self.setStyleSheet(
+            """
+            QListWidget {
+                border: 1px solid palette(mid);
+                border-radius: 8px;
+                padding: 4px;
+                background: palette(base);
+                font-size: 13px;
+            }
+            QListWidget::item {
+                padding: 8px 10px;
+                border-radius: 6px;
+            }
+            QListWidget::item:selected {
+                background: palette(highlight);
+                color: palette(highlighted-text);
+            }
+            """
+        )
         self.itemSelectionChanged.connect(self.handleClicked)
+        self.itemDoubleClicked.connect(self._open_edit)
         self.refresh_()
 
+    def _open_edit(self, item):
+        if item is None or isinstance(getattr(item, "owner", None), int):
+            return
+        if hasattr(self.parent, "table_info"):
+            self.parent.table_info.edit_owner()
+
     def refresh_(self):
-        """Rafraîchit la liste des utilisateurs (sans les superusers)"""
+        """Rafraîchit la liste des utilisateurs (sans les superusers)."""
         self.clear()
-        # En-tête
-        self.addItem(OwnerQListWidgetItem(-1))
-        
-        # Trier les utilisateurs : actifs d'abord, puis par nom
         owners = list(Owner.get_non_superusers())
-        owners.sort(key=lambda x: (not x.isactive, x.username.lower()))
-        
+        owners.sort(key=lambda x: (not x.isactive, (x.username or "").lower()))
         for owner in owners:
             self.addItem(OwnerQListWidgetItem(owner))
-        
-        # Mettre à jour les statistiques si disponible
-        if hasattr(self.parent, 'update_stats'):
+        if hasattr(self.parent, "update_stats"):
             self.parent.update_stats()
+        if hasattr(self.parent, "filter_users"):
+            query = ""
+            if getattr(self.parent, "search_field", None) is not None:
+                query = self.parent.search_field.text()
+            self.parent.filter_users(query)
+        elif self.count():
+            self.setCurrentRow(0)
 
     def handleClicked(self):
         owner_item = self.currentItem()
-        if not owner_item or isinstance(owner_item.owner, int):
+        info = getattr(self.parent, "table_info", None)
+        if info is None or not owner_item or isinstance(owner_item.owner, int):
             return
         self.parent.table_info.edit_ow_but.setEnabled(True)
         self.parent.table_info.delete_ow_but.setEnabled(True)
@@ -547,13 +608,16 @@ class OwnerQListWidgetItem(QListWidgetItem):
     def init_text(self):
         try:
             # Afficher plus d'informations dans la liste
-            st = "actif" if self.owner.isactive else "inactif"
-            role = "Admin" if self.owner.group == Owner.ADMIN else "Utilisateur"
-            extra = " · connecté" if self.owner.is_identified else ""
-            phone = (self.owner.phone or "").strip()
+            status = "Actif" if self.owner.isactive else "Inactif"
+            role = "Administrateur" if self.owner.group == Owner.ADMIN else "Utilisateur"
+            phone = str(self.owner.phone or "").strip()
             phone_disp = phone if phone else "—"
-            display_text = f"{self.owner.username}  ({role}, {st}){extra}"
-            self.setText(display_text)
+            bits = [role, status]
+            if phone:
+                bits.append(phone)
+            if self.owner.is_identified:
+                bits.append("connecté")
+            self.setText(f"{self.owner.username}\n{'  ·  '.join(bits)}")
 
             tooltip = (
                 f"{self.owner.username}\n"
@@ -603,36 +667,22 @@ class InfoTableWidget(FWidget):
         # Boutons d'action
         buttons_layout = QHBoxLayout()
         
-        self.edit_ow_but = Button("Modifier…")
-        self.edit_ow_but.setIcon(
-            QIcon.fromTheme(
-                "document-new", QIcon("{}edit_user.png".format(CConstants.img_cmedia))
-            )
-        )
+        self.edit_ow_but = _compact_button("Modifier")
         self.edit_ow_but.setEnabled(False)
         self.edit_ow_but.setToolTip("Modifier les informations de l'utilisateur")
         self.edit_ow_but.clicked.connect(self.edit_owner)
         buttons_layout.addWidget(self.edit_ow_but)
-        
-        # Bouton activer/désactiver
-        self.toggle_active_but = Button("Activer le compte")
+
+        self.toggle_active_but = _compact_button("Activer")
         self.toggle_active_but.setEnabled(False)
         self.toggle_active_but.setToolTip("Activer ou désactiver le compte utilisateur")
         self.toggle_active_but.clicked.connect(self.toggle_active)
         buttons_layout.addWidget(self.toggle_active_but)
-        
-        # Bouton supprimer
-        self.delete_ow_but = Button("Supprimer…")
-        self.delete_ow_but.setIcon(
-            QIcon.fromTheme("", QIcon("{}del.png".format(CConstants.img_cmedia)))
-        )
+
+        self.delete_ow_but = _compact_button("Supprimer")
         self.delete_ow_but.setEnabled(False)
         self.delete_ow_but.setToolTip("Supprimer définitivement l'utilisateur")
         self.delete_ow_but.clicked.connect(self.delete_owner)
-        self.delete_ow_but.setStyleSheet(
-            "background-color: #c0392b; color: white; padding: 6px 12px; "
-            "border-radius: 4px; font-weight: 600;"
-        )
         buttons_layout.addStretch(1)
         buttons_layout.addWidget(self.delete_ow_but)
 
@@ -647,7 +697,7 @@ class InfoTableWidget(FWidget):
 
         if isinstance(self.owner, int) or not self.owner:
             self.details.setText(
-                "<p style='color:#555;padding:12px;'>Sélectionnez un compte dans la liste "
+                "<p style='padding:12px;'>Sélectionnez un compte dans la liste "
                 "pour afficher le détail et les actions.</p>"
             )
             return
@@ -670,23 +720,23 @@ class InfoTableWidget(FWidget):
         )
         phone_disp = (self.owner.phone or "").strip() or "Non renseigné"
 
+        role = "Administrateur" if self.owner.group == Owner.ADMIN else "Utilisateur"
         self.details.setText(
             f"""
-            <div style="padding:12px 14px;background:#f8f9fa;border-radius:8px;
-                        border:1px solid #dee2e6;">
-                <div style="font-size:18px;font-weight:700;color:#2c3e50;margin-bottom:8px;">
+            <div style="padding:4px 2px 8px 2px;">
+                <div style="font-size:18px;font-weight:700;margin-bottom:8px;">
                     {self.owner.username}
                 </div>
-                <table style="width:100%;font-size:13px;color:#333;">
+                <table style="width:100%;font-size:13px;">
                     <tr><td style="padding:4px 8px 4px 0;width:42%;"><b>État</b></td>
                         <td style="padding:4px 0;">{status_text}</td></tr>
                     <tr><td style="padding:4px 8px 4px 0;"><b>Rôle</b></td>
-                        <td style="padding:4px 0;">{self.owner.group}</td></tr>
+                        <td style="padding:4px 0;">{role}</td></tr>
                     <tr><td style="padding:4px 8px 4px 0;"><b>Téléphone</b></td>
                         <td style="padding:4px 0;">{phone_disp}</td></tr>
                     <tr><td style="padding:4px 8px 4px 0;"><b>Dernière connexion</b></td>
                         <td style="padding:4px 0;">{last_login_str}</td></tr>
-                    <tr><td style="padding:4px 8px 4px 0;"><b>Connexions (total)</b></td>
+                    <tr><td style="padding:4px 8px 4px 0;"><b>Connexions</b></td>
                         <td style="padding:4px 0;">{self.owner.login_count}</td></tr>
                     <tr><td style="padding:4px 8px 4px 0;"><b>Session</b></td>
                         <td style="padding:4px 0;">{is_connected}</td></tr>
@@ -696,18 +746,10 @@ class InfoTableWidget(FWidget):
         )
         
         # Mettre à jour le bouton activer/désactiver
-        if self.owner.isactive:
-            self.toggle_active_but.setText("Désactiver le compte")
-            self.toggle_active_but.setStyleSheet(
-                "background-color: #d35400; color: white; padding: 6px 12px; "
-                "border-radius: 4px; font-weight: 600;"
-            )
-        else:
-            self.toggle_active_but.setText("Activer le compte")
-            self.toggle_active_but.setStyleSheet(
-                "background-color: #27ae60; color: white; padding: 6px 12px; "
-                "border-radius: 4px; font-weight: 600;"
-            )
+        self.toggle_active_but.setText(
+            "Désactiver" if self.owner.isactive else "Activer"
+        )
+        self.toggle_active_but.setStyleSheet("")
 
     def edit_owner(self):
         if not self.owner or isinstance(self.owner, int):
@@ -794,7 +836,7 @@ class InfoTableWidget(FWidget):
                 # Réinitialiser l'affichage
                 self.owner = None
                 self.details.setText(
-                    "<p style='color:#555;padding:12px;'>Sélectionnez un compte dans la liste "
+                    "<p style='padding:12px;'>Sélectionnez un compte dans la liste "
                     "pour afficher le détail et les actions.</p>"
                 )
                 self.edit_ow_but.setEnabled(False)
@@ -934,7 +976,24 @@ class SettingsTableWidget(FWidget):
             settings.save()
 
             logger.info("Paramètres mis à jour avec succès")
-            if hasattr(self.parent, 'parent') and hasattr(self.parent.parent, 'Notify'):
-                self.parent.parent.Notify("Paramètre mise à jour avec success", "success")
+            notified = False
+            parent = self.parent
+            while parent is not None and not notified:
+                if hasattr(parent, "Notify"):
+                    parent.Notify("Paramètre mis à jour avec succès", "success")
+                    notified = True
+                    break
+                parent = parent.parent() if hasattr(parent, "parent") else None
+            if not notified:
+                QMessageBox.information(
+                    self,
+                    "Paramètres",
+                    "Paramètre mis à jour avec succès.",
+                )
         except Exception as e:
             logger.error(f"Erreur lors de la sauvegarde des paramètres: {e}")
+            QMessageBox.critical(
+                self,
+                "Erreur",
+                f"Impossible d'enregistrer les paramètres :\n{e}",
+            )
