@@ -219,6 +219,10 @@ LICENSE_REQUIRED = True
 # False = copie silencieuse dans le dossier backups/ à côté de database.db (recommandé, exe / atexit).
 BACKUP_TO_USB = False
 
+# Valeur par défaut (nouveaux paramètres) : sauvegarde auto à la fermeture.
+# L’utilisateur peut activer/désactiver via Préférences → Paramètre.
+AUTO_BACKUP_ON_EXIT = False
+
 
 def license_required():
     """Retourne False si la licence ne doit pas bloquer l'application."""
@@ -279,6 +283,7 @@ class CConstants:
     LOCAL_DEV_URL = LOCAL_DEV_URL
     LICENSE_REQUIRED = LICENSE_REQUIRED
     BACKUP_TO_USB = BACKUP_TO_USB
+    AUTO_BACKUP_ON_EXIT = AUTO_BACKUP_ON_EXIT
 
     def __init__(self):
         pass

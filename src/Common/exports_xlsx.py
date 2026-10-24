@@ -300,6 +300,9 @@ def export_dynamic_data(dict_data):
     """
     Génère le XLSX dans un fichier temporaire, affiche le dialogue (comme le PDF),
     enregistre au chemin choisi puis ouvre le fichier final.
+
+    Returns:
+        str | None: chemin du fichier enregistré, ou None si annulé / échec.
     """
     file_base = dict_data.get("file_name") or "export"
 
@@ -322,12 +325,12 @@ def export_dynamic_data(dict_data):
                     )
             except Exception:
                 pass
-            return
+            return None
 
         dest = _show_xlsx_export_dialog(tmp_path, str(file_base))
         if not dest:
             logger.info("Export Excel : enregistrement annulé après le dialogue")
-            return
+            return None
 
         shutil.copy2(tmp_path, dest)
         logger.info("Excel enregistré : %s", dest)
@@ -348,6 +351,7 @@ def export_dynamic_data(dict_data):
             logger.warning(
                 "Impossible d’ouvrir le classeur automatiquement : %s", abs_dest
             )
+        return abs_dest
     finally:
         try:
             os.unlink(tmp_path)

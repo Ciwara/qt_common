@@ -875,7 +875,8 @@ class SettingsTableWidget(FWidget):
                 'after_cam': 1,
                 'devise': Settings.XOF,
                 'toolbar_position': Settings.LEFT,
-                'toolbar': True
+                'toolbar': True,
+                'auto_backup_on_exit': False,
             })()
         
         self.parent = parent
@@ -930,11 +931,23 @@ class SettingsTableWidget(FWidget):
                                 le menu toolbar"""
         )
 
+        self.auto_backup_checked = QCheckBox("Active")
+        if getattr(self.settings, "auto_backup_on_exit", False):
+            self.auto_backup_checked.setCheckState(Qt.CheckState.Checked)
+        self.auto_backup_checked.setToolTip(
+            "Si activé, une sauvegarde de la base est proposée / effectuée "
+            "à la fermeture de l'application (Exit ou croix)."
+        )
+
         formbox = QFormLayout()
         formbox.addRow(FormLabel("URL :*"), self.url_field)
         # formbox.addRow(FormLabel("Theme :"), self.box_theme)  # Thème désactivé
         formbox.addRow(FormLabel("Identification"), self.checked)
         formbox.addRow(FormLabel("Menu vertical"), self.toolbar_checked)
+        formbox.addRow(
+            FormLabel("Sauvegarde auto à la fermeture"),
+            self.auto_backup_checked,
+        )
         formbox.addRow(
             FormLabel("Nombre de chiffre après la vilgule :"), self.box_vilgule
         )
@@ -965,6 +978,9 @@ class SettingsTableWidget(FWidget):
                 True if self.toolbar_checked.checkState() == Qt.CheckState.Checked else False
             )
             print("settings.toolbar", settings.toolbar)
+            settings.auto_backup_on_exit = (
+                self.auto_backup_checked.checkState() == Qt.CheckState.Checked
+            )
             settings.after_cam = int(self.box_vilgule.value())
             # Thème désactivé - garder la valeur existante ; vide/default suit le système.
             if not hasattr(settings, 'theme') or not settings.theme:

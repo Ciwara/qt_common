@@ -830,6 +830,8 @@ def save_database_on_exit(max_backups=10, parent=None):
     """
     Sauvegarde automatique à la fermeture.
 
+    Si ``AUTO_BACKUP_ON_EXIT`` est False : ne fait rien.
+
     Par défaut (BACKUP_TO_USB=False) :
     - copie silencieuse dans ``backups/`` à côté de ``database.db`` ;
     - propose toujours une sauvegarde sur clé USB (branchement ou sélection manuelle).
@@ -839,6 +841,24 @@ def save_database_on_exit(max_backups=10, parent=None):
     global _EXIT_BACKUP_DONE
     try:
         from . import cstatic
+
+        enabled = bool(getattr(cstatic, "AUTO_BACKUP_ON_EXIT", False))
+        try:
+            from .models import Settings
+
+            st = Settings.select().where(Settings.id == 1).first()
+            if st is not None and hasattr(st, "auto_backup_on_exit"):
+                enabled = bool(st.auto_backup_on_exit)
+        except Exception as pref_err:
+            logger.debug(
+                "Préférence auto_backup_on_exit illisible, fallback config: %s",
+                pref_err,
+            )
+
+        if not enabled:
+            logger.info("Sauvegarde automatique à la fermeture désactivée")
+            _EXIT_BACKUP_DONE = True
+            return False
 
         if cstatic.BACKUP_TO_USB:
             ok = _save_database_on_usb(max_backups, parent)

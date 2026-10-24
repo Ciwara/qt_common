@@ -650,7 +650,10 @@ class LoginWidget(FDialog, FWidget):
         self.reset_button = QPushButton("Mot de passe oublié ?")
         self.reset_button.setObjectName("linkButton")
         self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reset_button.setToolTip("Réinitialisation du mot de passe")
+        self.reset_button.setToolTip(
+            "Réinitialiser le mot de passe : choisir le compte, noter le code, "
+            "puis définir un nouveau mot de passe"
+        )
         self.reset_button.clicked.connect(self.show_reset_dialog)
         actions.addWidget(self.reset_button)
 
@@ -790,5 +793,17 @@ class LoginWidget(FDialog, FWidget):
     def show_reset_dialog(self):
         from .reset_password import ResetPasswordWidget
 
-        dialog = ResetPasswordWidget(self)
-        dialog.exec()
+        preselect = ""
+        try:
+            users_list = list(self.liste_username)
+            idx = self.box_username.currentIndex() if self.box_username else -1
+            if 0 <= idx < len(users_list):
+                preselect = str(users_list[idx].username)
+        except Exception:
+            preselect = ""
+
+        dialog = ResetPasswordWidget(self, preselect_username=preselect)
+        if dialog.exec() and preselect and self.password_field is not None:
+            self.password_field.clear()
+            self.password_field.setFocus()
+            self._set_error("")

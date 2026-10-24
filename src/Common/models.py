@@ -642,6 +642,8 @@ class Settings(BaseModel):
     devise = peewee.CharField(choices=DEVISE, default=XOF)
     # Échelle de police globale (1.0 = défaut). Utilisée pour l'accessibilité.
     font_scale = peewee.FloatField(default=1.0)
+    # Sauvegarde auto à la fermeture (optionnelle, désactivée par défaut).
+    auto_backup_on_exit = peewee.BooleanField(default=False)
 
     @classmethod
     def init_settings(cls):
@@ -658,11 +660,22 @@ class Settings(BaseModel):
                 if dbh is None:
                     logger.error("dbh n'est pas initialisé")
                     raise Exception("Base de données non initialisée")
+
+                try:
+                    from . import cstatic as _cs
+
+                    default_auto_backup = bool(
+                        getattr(_cs, "AUTO_BACKUP_ON_EXIT", False)
+                    )
+                except Exception:
+                    default_auto_backup = False
                     
                 query = """
                 INSERT OR REPLACE INTO settings 
-                (id, is_syncro, last_update_date, slug, auth_required, after_cam, toolbar, toolbar_position, url, theme, devise, font_scale)
-                VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, is_syncro, last_update_date, slug, auth_required, after_cam,
+                 toolbar, toolbar_position, url, theme, devise, font_scale,
+                 auto_backup_on_exit)
+                VALUES (1, 0, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 dbh.execute_sql(query, [
                     cls.DEFAULT,      # slug
@@ -674,6 +687,7 @@ class Settings(BaseModel):
                     "system",        # theme
                     cls.XOF,          # devise
                     1.0,              # font_scale
+                    default_auto_backup,
                 ])
                 logger.debug("Paramètres créés avec succès via SQL")
                 
@@ -684,6 +698,14 @@ class Settings(BaseModel):
             except Exception as e:
                 logger.error(f"Erreur lors de la création SQL: {e}")
                 # Fallback vers la méthode classique
+                try:
+                    from . import cstatic as _cs
+
+                    default_auto_backup = bool(
+                        getattr(_cs, "AUTO_BACKUP_ON_EXIT", False)
+                    )
+                except Exception:
+                    default_auto_backup = False
                 settings = cls(
                     id=1,
                     slug=cls.DEFAULT,
@@ -695,6 +717,7 @@ class Settings(BaseModel):
                     theme="system",
                     devise=cls.XOF,
                     font_scale=1.0,
+                    auto_backup_on_exit=default_auto_backup,
                 )
                 settings.save()
                 logger.debug("Paramètres créés avec succès via fallback")
@@ -712,6 +735,9 @@ class Settings(BaseModel):
             "theme": self.theme,
             "devise": self.devise,
             "font_scale": self.font_scale,
+            "auto_backup_on_exit": bool(
+                getattr(self, "auto_backup_on_exit", False)
+            ),
             "is_syncro": self.is_syncro,
             "last_update_date": datetime_to_str(self.last_update_date),
         }
@@ -978,6 +1004,7 @@ def _ensure_legacy_sqlite_columns():
         "settings": [
             ("auth_required", "INTEGER NOT NULL DEFAULT 1"),
             ("font_scale", "REAL NOT NULL DEFAULT 1.0"),
+            ("auto_backup_on_exit", "INTEGER NOT NULL DEFAULT 0"),
         ],
         "owner": [
             ("islog", "INTEGER NOT NULL DEFAULT 0"),

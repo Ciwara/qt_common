@@ -455,9 +455,11 @@ class HelpPageWidget(QDialog, FWidget):
                 <li>Choisissez l'emplacement de sauvegarde</li>
             </ol>
             <p>
-                À la fermeture de l'application, une sauvegarde locale est créée automatiquement.
-                L'application propose aussi de copier la base sur une clé USB
-                (même si aucune clé n'est encore branchée : vous pourrez la sélectionner).
+                Pensez à sauvegarder régulièrement via le menu
+                <strong>Fichier → Base de données → Sauvegarder</strong>.
+                Vous pouvez aussi activer une sauvegarde automatique à la
+                fermeture dans
+                <strong>Préférences → Paramètre → Sauvegarde auto à la fermeture</strong>.
             </p>
             
             <h2 style="color: #495057; margin-top: 30px;">📥 Importer une base de données</h2>
@@ -498,7 +500,14 @@ class HelpPageWidget(QDialog, FWidget):
                 <h2 style="color: #495057;">👤 Utilisateurs</h2>
                 
                 <h3 style="color: #6c757d;">Q: Comment réinitialiser un mot de passe oublié ?</h3>
-                <p><strong>R:</strong> Sur l'écran de connexion, cliquez sur « Mot de passe oublié ? », choisissez votre compte, notez le code à 6 chiffres (valable 1 h), puis saisissez un nouveau mot de passe. Un administrateur peut aussi modifier un mot de passe depuis la gestion des utilisateurs.</p>
+                <p><strong>R:</strong> Sur l'écran de connexion, cliquez sur « Mot de passe oublié ? » puis :</p>
+                <ol style="line-height: 1.8;">
+                    <li>Choisissez votre compte et cliquez sur <strong>Continuer</strong></li>
+                    <li>Notez (ou copiez) le <strong>code à 6 chiffres</strong> affiché — il est valable 1 heure</li>
+                    <li>Recopiez ce code dans le champ « Code »</li>
+                    <li>Saisissez deux fois le nouveau mot de passe, puis <strong>Enregistrer</strong></li>
+                </ol>
+                <p>Un administrateur peut aussi changer un mot de passe depuis <strong>Paramètres → Administration → Utilisateurs</strong>.</p>
                 
                 <h3 style="color: #6c757d; margin-top: 20px;">Q: Puis-je supprimer un utilisateur connecté ?</h3>
                 <p><strong>R:</strong> Non, vous devez d'abord vous déconnecter avant de pouvoir supprimer votre propre compte.</p>
