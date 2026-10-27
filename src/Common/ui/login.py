@@ -4,8 +4,8 @@
 
 import datetime
 
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QPixmap
+from PyQt6.QtCore import QEvent, QUrl, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -27,21 +27,25 @@ from .common import (
     FDialog,
     FWidget,
 )
-from .util import check_is_empty, field_error
+from .util import check_is_empty, field_error, is_valide_mac, license_management_url
 
 try:
-    from ..cstatic import CConstants
+    from ..cstatic import CConstants, license_required
 except Exception as exc:
     print(f"⚠️ Erreur lors de l'importation de CConstants: {exc}")
+
+    def license_required():
+        return False
 
 
 class LoginWidget(FDialog, FWidget):
     title_page = "Connexion"
     login_successful = pyqtSignal()
 
-    def __init__(self, parent=None, hibernate=False, *args, **kwargs):
+    def __init__(self, parent=None, hibernate=False, license_blocked=False, *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
         self.hibernate = hibernate
+        self.license_blocked = bool(license_blocked)
         self.is_loading = False
         self._drag_anchor = None
         self._no_users = False
@@ -111,6 +115,26 @@ class LoginWidget(FDialog, FWidget):
             }
             #loginBrandHint {
                 font-size: 11px;
+            }
+            #loginLicenseBanner {
+                background-color: #fdecea;
+                border: 1px solid #e74c3c;
+                border-radius: 10px;
+                padding: 10px 12px;
+                color: #922b21;
+                font-size: 12px;
+            }
+            #loginForm QPushButton#offersButton {
+                padding: 10px 14px;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 600;
+                background-color: #1a5276;
+                color: #ffffff;
+                border: none;
+            }
+            #loginForm QPushButton#offersButton:hover {
+                background-color: #154360;
             }
             #loginAvatar {
                 background-color: rgba(255, 255, 255, 0.16);
@@ -550,6 +574,25 @@ class LoginWidget(FDialog, FWidget):
         form.addWidget(self.sub_label)
         form.addSpacing(8)
 
+        self._license_banner = QLabel()
+        self._license_banner.setObjectName("loginLicenseBanner")
+        self._license_banner.setWordWrap(True)
+        self._license_banner.hide()
+        form.addWidget(self._license_banner)
+
+        self.offers_button = QPushButton("Voir les offres en ligne")
+        self.offers_button.setObjectName("offersButton")
+        self.offers_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.offers_button.setToolTip("Ouvrir la page des offres sur le site")
+        self.offers_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.offers_button.clicked.connect(self._open_offers_page)
+        self.offers_button.hide()
+        form.addWidget(self.offers_button)
+
+        self._refresh_license_banner()
+
         try:
             self.liste_username = Owner.get_active_non_superusers().order_by(
                 Owner.last_login.desc()
@@ -678,6 +721,43 @@ class LoginWidget(FDialog, FWidget):
             return False
         return not check_is_empty(self.password_field)
 
+    def _open_offers_page(self):
+        try:
+            url = license_management_url()
+        except Exception:
+            url = ""
+        if not url:
+            return
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _refresh_license_banner(self):
+        banner = getattr(self, "_license_banner", None)
+        offers = getattr(self, "offers_button", None)
+        if banner is None:
+            return
+        blocked = self.license_blocked
+        if not blocked and license_required():
+            try:
+                blocked = is_valide_mac()[1] != CConstants.OK
+            except Exception:
+                blocked = self.license_blocked
+        self.license_blocked = bool(blocked)
+        if not self.license_blocked:
+            banner.hide()
+            if offers is not None:
+                offers.hide()
+            return
+        app_name = getattr(CConstants, "APP_NAME", "cette application")
+        banner.setText(
+            "Licence requise — l'accès à {} est bloqué.\n"
+            "Utilisez le bouton ci-dessous pour voir les offres en ligne.".format(
+                app_name
+            )
+        )
+        banner.show()
+        if offers is not None:
+            offers.show()
+
     def cancel(self):
         print("❌ Fermeture de l'application demandée par l'utilisateur")
         self.close()
@@ -749,6 +829,24 @@ class LoginWidget(FDialog, FWidget):
                 self.password_field.setFocus()
                 self.set_loading_state(False)
                 return False
+
+            # Licence bloquée : rester sur la page login (pas d'entrée dans l'app)
+            if license_required():
+                try:
+                    from .util import request_online_license
+
+                    request_online_license()
+                except Exception:
+                    pass
+                if is_valide_mac()[1] != CConstants.OK:
+                    self.license_blocked = True
+                    self._refresh_license_banner()
+                    self._set_error(
+                        "Licence absente ou expirée.\n"
+                        "Consultez les offres en ligne sur le site."
+                    )
+                    self.set_loading_state(False)
+                    return False
 
             owner.reset_login_attempts()
             Owner.update(is_identified=False).where(Owner.is_identified).execute()

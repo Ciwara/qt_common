@@ -101,7 +101,6 @@ class HelpPageWidget(QDialog, FWidget):
             ("🔄 Mise à jour", self.create_update_page),
             ("🚀 Démarrage rapide", self.create_quickstart_content),
             ("👤 Gestion des utilisateurs", self.create_users_help_content),
-            ("🔐 Licences", self.create_license_help_content),
             ("⚙️ Paramètres", self.create_settings_help_content),
             ("🛠️ Outils", self.create_tools_help_content),
             ("❓ FAQ", self.create_faq_content),
@@ -180,11 +179,6 @@ class HelpPageWidget(QDialog, FWidget):
                     <p>Gérez les utilisateurs, les permissions et les sessions.</p>
                 </div>
                 
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
-                    <h3 style="color: #ffc107; margin-top: 0;">🔐 Licences</h3>
-                    <p>Informations sur l'activation et la gestion des licences.</p>
-                </div>
-                
                 <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #dc3545;">
                     <h3 style="color: #dc3545; margin-top: 0;">⚙️ Paramètres</h3>
                     <p>Configurez l'application selon vos préférences.</p>
@@ -210,8 +204,9 @@ class HelpPageWidget(QDialog, FWidget):
             
             <h2 style="color: #495057; margin-top: 30px;">Premiers pas</h2>
             <ol style="line-height: 2;">
-                <li><strong>Activation de la licence</strong><br>
-                    Au premier lancement, vous devrez activer votre licence. Suivez les instructions à l'écran.
+                <li><strong>Licence</strong><br>
+                    Si l'accès est bloqué, utilisez le lien « page produit » sur l'écran de connexion
+                    pour obtenir une licence sur le site web.
                 </li>
                 <li><strong>Configuration de l'organisation</strong><br>
                     Renseignez les informations de votre organisation dans les paramètres.
@@ -322,70 +317,6 @@ class HelpPageWidget(QDialog, FWidget):
         </div>
         """
     
-    def create_license_help_content(self):
-        """Contenu d'aide pour les licences"""
-        return """
-        <div style="max-width: 900px; margin: 0 auto;">
-            <h1 style="color: #2c3e50; border-bottom: 3px solid #ffc107; padding-bottom: 10px;">
-                🔐 Gestion des licences
-            </h1>
-            
-            <h2 style="color: #495057; margin-top: 30px;">Activer une licence complète</h2>
-            <ol style="line-height: 2;">
-                <li>Allez dans <strong>Licence → Activation</strong></li>
-                <li>Copiez le <strong>code d'identification de votre machine</strong></li>
-                <li>Communiquez ce code au support technique</li>
-                <li>Remplissez le formulaire avec :
-                    <ul>
-                        <li>Le nom du propriétaire de la licence</li>
-                        <li>Le code de licence fourni par le support</li>
-                    </ul>
-                </li>
-                <li>Cliquez sur <strong>"✅ Activer la licence"</strong></li>
-            </ol>
-            
-            <h2 style="color: #495057; margin-top: 30px;">Activer une licence d'évaluation</h2>
-            <p>Pour tester l'application gratuitement pendant 60 jours :</p>
-            <ol style="line-height: 2;">
-                <li>Allez dans <strong>Licence → Activation</strong></li>
-                <li>Cliquez sur <strong>"🚀 Activer l'évaluation (60 jours)"</strong></li>
-                <li>La licence d'évaluation sera activée automatiquement</li>
-            </ol>
-            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px;">
-                <strong>⚠️ Note :</strong> La licence d'évaluation ne peut être utilisée qu'une seule fois par machine.
-            </div>
-            
-            <h2 style="color: #495057; margin-top: 30px;">Vérifier le statut de votre licence</h2>
-            <p>Dans la fenêtre de gestion de licence, vous pouvez voir :</p>
-            <ul style="line-height: 2;">
-                <li>Le type de licence (complète ou d'évaluation)</li>
-                <li>Le propriétaire de la licence</li>
-                <li>La date d'activation</li>
-                <li>La date d'expiration (pour les licences d'évaluation)</li>
-                <li>Le temps restant (avec barre de progression)</li>
-            </ul>
-            
-            <h2 style="color: #495057; margin-top: 30px;">Exporter la licence</h2>
-            <p>Pour sauvegarder vos informations de licence :</p>
-            <ol style="line-height: 2;">
-                <li>Dans la fenêtre de gestion de licence</li>
-                <li>Cliquez sur <strong>"📄 Exporter la licence"</strong></li>
-                <li>Le fichier de licence sera ouvert dans l'explorateur de fichiers</li>
-            </ol>
-            
-            <h2 style="color: #495057; margin-top: 30px;">Révoquer une licence</h2>
-            <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 5px;">
-                <strong>🚨 Attention :</strong> La révocation d'une licence est définitive. Vous devrez réactiver une licence pour continuer à utiliser l'application.
-            </div>
-            <p>Pour révoquer une licence :</p>
-            <ol style="line-height: 2;">
-                <li>Dans la fenêtre de gestion de licence</li>
-                <li>Cliquez sur <strong>"🗑️ Révoquer la licence"</strong></li>
-                <li>Confirmez l'action</li>
-            </ol>
-        </div>
-        """
-    
     def create_settings_help_content(self):
         """Contenu d'aide pour les paramètres"""
         return """
@@ -486,14 +417,13 @@ class HelpPageWidget(QDialog, FWidget):
             <div style="margin-top: 30px;">
                 <h2 style="color: #495057;">🔐 Licence</h2>
                 
-                <h3 style="color: #6c757d;">Q: Puis-je utiliser une licence d'évaluation plusieurs fois ?</h3>
-                <p><strong>R:</strong> Non, la licence d'évaluation ne peut être activée qu'une seule fois par machine.</p>
+                <h3 style="color: #6c757d;">Q: Comment obtenir une licence ?</h3>
+                <p><strong>R:</strong> Depuis l'écran de connexion (si l'accès est bloqué), ouvrez le lien
+                <strong>page produit</strong> vers le site web, ou contactez le support.</p>
                 
-                <h3 style="color: #6c757d; margin-top: 20px;">Q: Que faire si ma licence expire ?</h3>
-                <p><strong>R:</strong> Contactez le support technique avec votre code de machine pour obtenir une licence complète.</p>
-                
-                <h3 style="color: #6c757d; margin-top: 20px;">Q: Puis-je transférer ma licence sur une autre machine ?</h3>
-                <p><strong>R:</strong> Les licences sont liées à la machine. Contactez le support pour un transfert.</p>
+                <h3 style="color: #6c757d; margin-top: 20px;">Q: Pourquoi reste-je sur la page de connexion ?</h3>
+                <p><strong>R:</strong> Sans licence valide, l'application reste sur l'écran de connexion
+                et affiche le lien vers la page produit.</p>
             </div>
             
             <div style="margin-top: 40px;">

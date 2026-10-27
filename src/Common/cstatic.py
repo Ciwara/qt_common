@@ -206,7 +206,7 @@ APP_LOGO = os.path.join(img_media, "logo.png")
 APP_LOGO_ICO = os.path.join(img_media, "logo.ico")
 ExportFolders = []
 ExportFiles = []
-BASE_URL = "https://file-repo.ml"
+BASE_URL = "http://176.58.116.12:9001"
 # Si le serveur distant ne répond pas, essayer ce serveur de développement local.
 LOCAL_DEV_URL = "http://127.0.0.1:8001"
 
@@ -288,5 +288,39 @@ class CConstants:
     def __init__(self):
         pass
 
+
+_ARGV_DEBUG_APPLIED = False
+
+
+def apply_argv_debug_flag(argv=None):
+    """Active DEBUG si ``--debug`` (ou ``-d``) est passé en ligne de commande.
+
+    Retire le flag de ``sys.argv`` (évite les warnings Qt) et met à jour
+    ``DEBUG`` / ``CConstants.DEBUG``. Sans flag → ``False``.
+    Idempotent : un second appel (ex. cmain après main) ne réécrit pas le flag.
+    """
+    global DEBUG, _ARGV_DEBUG_APPLIED
+    if _ARGV_DEBUG_APPLIED:
+        return DEBUG
+    if argv is None:
+        argv = sys.argv
+    flags = {"--debug", "-d"}
+    debug = any(arg in flags for arg in argv[1:])
+    if argv is sys.argv:
+        sys.argv[:] = [argv[0]] + [a for a in argv[1:] if a not in flags]
+    DEBUG = bool(debug)
+    CConstants.DEBUG = DEBUG
+    _ARGV_DEBUG_APPLIED = True
+    if DEBUG:
+        logger.info("Mode DEBUG activé (--debug) → serveur %s", LOCAL_DEV_URL)
+    return DEBUG
+
+
 # Exportation explicite des symboles
-__all__ = ['CConstants', 'logger', 'license_required', 'LICENSE_REQUIRED']
+__all__ = [
+    "CConstants",
+    "logger",
+    "license_required",
+    "LICENSE_REQUIRED",
+    "apply_argv_debug_flag",
+]

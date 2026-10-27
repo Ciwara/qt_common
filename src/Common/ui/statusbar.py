@@ -527,7 +527,7 @@ class _CallThread(QThread):
 
 
 class ConnectionStatusWidget(QWidget):
-    """Internet, serveur, synchronisation et licence."""
+    """Internet, serveur et synchronisation."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -538,7 +538,7 @@ class ConnectionStatusWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         intro = QLabel(
-            "État de la connexion, du serveur, de la synchronisation et de la licence."
+            "État de la connexion, du serveur et de la synchronisation."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -550,11 +550,9 @@ class ConnectionStatusWidget(QWidget):
         self.internet_label = QLabel("—")
         self.server_label = QLabel("—")
         self.sync_label = QLabel("—")
-        self.license_label = QLabel("—")
         form.addRow("Internet :", self.internet_label)
         form.addRow("Serveur :", self.server_label)
         form.addRow("Synchronisation :", self.sync_label)
-        form.addRow("Licence :", self.license_label)
         layout.addWidget(form_host)
 
         actions = QHBoxLayout()
@@ -578,7 +576,6 @@ class ConnectionStatusWidget(QWidget):
         _set_status(self.internet_label, "Vérification…", None)
         _set_status(self.server_label, "Vérification…", None)
         _set_status(self.sync_label, "Vérification…", None)
-        _set_status(self.license_label, "Vérification…", None)
         self._thread = _CallThread(collect_connection_status, parent=self)
         self._thread.done.connect(self._apply_status)
         self._thread.finished.connect(self._clear_thread)
@@ -608,7 +605,6 @@ class ConnectionStatusWidget(QWidget):
                 )
             else:
                 _set_status(self.sync_label, "—", None)
-            _set_status(self.license_label, status["license_text"], status["license_ok"])
         except RuntimeError:
             return
 

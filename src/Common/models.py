@@ -637,7 +637,7 @@ class Settings(BaseModel):
     after_cam = peewee.IntegerField(default=2, verbose_name="")
     toolbar = peewee.BooleanField(default=True)
     toolbar_position = peewee.CharField(choices=POSITION, default=LEFT)
-    url = peewee.CharField(default="http://file-repo.ml")
+    url = peewee.CharField(default="http://176.58.116.12:9001")
     theme = peewee.CharField(default="system")
     devise = peewee.CharField(choices=DEVISE, default=XOF)
     # Échelle de police globale (1.0 = défaut). Utilisée pour l'accessibilité.
@@ -646,11 +646,42 @@ class Settings(BaseModel):
     auto_backup_on_exit = peewee.BooleanField(default=False)
 
     @classmethod
+    def _default_server_url(cls):
+        try:
+            from .cstatic import BASE_URL, CConstants, DEBUG, LOCAL_DEV_URL
+
+            if bool(getattr(CConstants, "DEBUG", False) or DEBUG):
+                return str(LOCAL_DEV_URL or "").rstrip("/") or "http://127.0.0.1:8001"
+            return str(BASE_URL or "").rstrip("/") or "http://176.58.116.12:9001"
+        except Exception:
+            return "http://176.58.116.12:9001"
+
+    @classmethod
     def init_settings(cls):
         """Initialise les paramètres par défaut si nécessaire"""
+        default_url = cls._default_server_url()
         try:
             settings = cls.get(id=1)
-            # logger.debug("Paramètres existants trouvés")  # Message masqué
+            current = str(getattr(settings, "url", "") or "").strip()
+            # URL vide → défaut qt_common
+            # localhost hors --debug, ou ancien domaine file-repo.ml → URL prod
+            needs_url = not current
+            lowered = current.lower()
+            if current and "file-repo.ml" in lowered:
+                needs_url = True
+            elif current and (
+                "://127.0.0.1" in lowered or "://localhost" in lowered
+            ):
+                try:
+                    from .cstatic import CConstants, DEBUG
+
+                    if not bool(getattr(CConstants, "DEBUG", False) or DEBUG):
+                        needs_url = True
+                except Exception:
+                    needs_url = True
+            if needs_url:
+                settings.url = default_url
+                settings.save()
         except cls.DoesNotExist:
             logger.debug("Création des paramètres par défaut")
             
@@ -683,7 +714,7 @@ class Settings(BaseModel):
                     2,                # after_cam (montants : 2 décimales)
                     True,             # toolbar
                     cls.LEFT,         # toolbar_position
-                    "http://file-repo.ml",  # url
+                    default_url,      # url (BASE_URL qt_common)
                     "system",        # theme
                     cls.XOF,          # devise
                     1.0,              # font_scale
@@ -713,7 +744,7 @@ class Settings(BaseModel):
                     after_cam=2,
                     toolbar=True,
                     toolbar_position=cls.LEFT,
-                    url="http://file-repo.ml",
+                    url=default_url,
                     theme="system",
                     devise=cls.XOF,
                     font_scale=1.0,
@@ -751,7 +782,12 @@ class Settings(BaseModel):
     def save(self, *args, **kwargs):
         """ """
         if not self.url:
-            self.url = "http://file-repo.ml"
+            try:
+                from .cstatic import BASE_URL
+
+                self.url = str(BASE_URL or "").rstrip("/") or "http://176.58.116.12:9001"
+            except Exception:
+                self.url = "http://176.58.116.12:9001"
         
         # Filtrer les arguments non supportés par la version de Peewee
         filtered_kwargs = {}

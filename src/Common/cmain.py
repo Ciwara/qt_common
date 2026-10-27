@@ -31,7 +31,6 @@ from .crash_handler import (
 )
 from .cstatic import CConstants, license_required, logger
 from .models import Organization, Owner, Settings, init_database, dbh
-from .ui.license_view import LicenseViewWidget
 from .ui.login import LoginWidget
 from .ui.organization_add_or_edit import NewOrEditOrganizationViewWidget
 from .ui.restoration_view import RestorationViewWidget
@@ -45,7 +44,7 @@ from .ui.window import FWindow
 
 
 def _schedule_launch_report():
-    """Inscription / desktop_client après affichage de la fenêtre (thread hors UI)."""
+    """Inscription / desktop_client une seule fois (thread hors UI)."""
     if not getattr(CConstants, "SERV", False):
         return
     try:
@@ -66,7 +65,6 @@ def _schedule_launch_report():
         thread = _LaunchReportThread()
         app = QApplication.instance()
         if app is not None:
-            # Garder une référence tant que le thread tourne
             if not hasattr(app, "_launch_report_threads"):
                 app._launch_report_threads = []
             app._launch_report_threads.append(thread)
@@ -236,57 +234,64 @@ def handle_initial_conditions(window):
                 logger.warning("Création d'organisation annulée par l'utilisateur")
                 return False
 
-        # Vérification de la licence (désactivable : COMMON_SKIP_LICENSE ou LICENSE_REQUIRED=False)
+        # Licence : vérifier d'abord en local ; n'envoyer qu'une fois si absente.
+        # Inscription / desktop_client ensuite (inscription sautée si déjà syncro + licence OK).
+        license_blocked = False
         if license_required():
             online = request_online_license()
             logger.info("Demande de licence en ligne : %s", online.get("message"))
+            # Si get_licence a été différé → inscription une seule fois (sync)
+            if online.get("deferred"):
+                try:
+                    from .server import Network
+
+                    Network().ensure_registered()
+                except Exception as exc:
+                    logger.warning("Inscription différée échouée: %s", exc)
             license_status = is_valide_mac()[1]
-            if license_status != CConstants.OK:
-                logger.debug(f"Vérification de la licence - Statut: {license_status}")
-                if LicenseViewWidget(parent=None).exec() != QDialog.DialogCode.Accepted:
-                    logger.warning("Activation de la licence annulée par l'utilisateur")
-                    return False
-                license_status = is_valide_mac()[1]
-                if license_status != CConstants.OK:
-                    logger.warning(
-                        "Licence toujours invalide après la fenêtre d'activation (statut: %s)",
-                        license_status,
-                    )
-                    return False
+            license_blocked = license_status != CConstants.OK
+            if license_blocked:
+                logger.info(
+                    "Licence invalide (statut=%s) : page de connexion avec lien produit",
+                    license_status,
+                )
         else:
             logger.info(
                 "Démarrage sans contrôle de licence (COMMON_SKIP_LICENSE ou LICENSE_REQUIRED désactivé)."
             )
 
-        # Vérification de la connexion
-        if settings.auth_required:
-            logger.debug("Authentification requise")
-            login_dialog = LoginWidget()
-            # Connecter le signal de connexion réussie pour mettre à jour le menu
-            if hasattr(window, 'refresh_menu_after_login'):
+        # Contact serveur (desktop_client ; inscription seulement si pas déjà fait)
+        _schedule_launch_report()
+
+        # Login obligatoire si auth_required OU licence bloquée (pas d'auto-login)
+        if settings.auth_required or license_blocked:
+            logger.debug(
+                "Authentification requise%s",
+                " (licence bloquée)" if license_blocked else "",
+            )
+            login_dialog = LoginWidget(license_blocked=license_blocked)
+            if hasattr(window, "refresh_menu_after_login"):
                 login_dialog.login_successful.connect(window.refresh_menu_after_login)
             if login_dialog.exec() != QDialog.DialogCode.Accepted:
                 logger.warning("Connexion annulée ou échouée")
                 return False
+            if license_required() and is_valide_mac()[1] != CConstants.OK:
+                logger.warning("Licence toujours invalide après connexion")
+                return False
             logger.info("Authentification réussie")
-            # Mettre à jour le menu après la connexion réussie
-            if hasattr(window, 'refresh_menu_after_login'):
+            if hasattr(window, "refresh_menu_after_login"):
                 window.refresh_menu_after_login()
         else:
             logger.debug("Aucune authentification requise - Connexion automatique du dernier utilisateur")
-            # Désactiver tous les utilisateurs identifiés
             Owner.update(is_identified=False).where(Owner.is_identified == True).execute()
             
-            # Récupérer le dernier utilisateur connecté (celui avec la dernière date de connexion)
             last_user = Owner.select().where(Owner.isactive == True).order_by(Owner.last_login.desc()).first()
             
             if last_user:
-                # Connecter automatiquement le dernier utilisateur
                 last_user.is_identified = True
                 last_user.save()
                 logger.info(f"✅ Utilisateur '{last_user.username}' connecté automatiquement")
                 
-                # Mettre à jour le menu pour afficher l'utilisateur connecté
                 if hasattr(window, 'refresh_menu_after_login'):
                     window.refresh_menu_after_login()
             else:
@@ -294,8 +299,6 @@ def handle_initial_conditions(window):
 
         logger.info("Toutes les conditions initiales sont satisfaites")
         window.showMaximized()
-        # Contact serveur en arrière-plan : ne jamais bloquer l'affichage (Windows hors ligne).
-        _schedule_launch_report()
         return True
 
     except Exception as e:
@@ -305,6 +308,13 @@ def handle_initial_conditions(window):
 
 def cmain(test=False):
     logger.info("Démarrage de l'application")
+    # --debug / -d : DEBUG=True et URL locale (si pas déjà consommé par l'app hôte)
+    try:
+        from .cstatic import apply_argv_debug_flag
+
+        apply_argv_debug_flag()
+    except Exception:
+        pass
     install_exception_hooks()
     
     try:

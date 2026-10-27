@@ -10,7 +10,6 @@ from ..exports import export_backup, export_database_as_file, import_backup
 from ..models import Owner, Settings
 from .clean_db import DBCleanerWidget
 from .common import FWidget
-from .license_view import LicenseViewWidget
 from ..cstatic import CConstants, logger
 
 
@@ -265,20 +264,6 @@ class FMenuBar(QMenuBar, FWidget):
         log_file.triggered.connect(self.open_logo_file)
         admin.addAction(log_file)
 
-        g_license = self.addMenu("&Licence")
-        if "license" not in exclude_mn:
-            license = QAction(
-                QIcon.fromTheme(
-                    "emblem-system",
-                    QIcon(f"{CConstants.img_cmedia}licence.png"),
-                ),
-                "Activation",
-                self,
-            )
-            license.setShortcut("Alt+A")
-            license.triggered.connect(self.goto_license)
-            g_license.addAction(license)
-
         # Exit — passe par exit() pour proposer la sauvegarde USB
         exit_ = QAction(QIcon.fromTheme("application-exit", QIcon("")), "Quitter", self)
         exit_.setShortcut("Ctrl+Q")
@@ -358,10 +343,6 @@ class FMenuBar(QMenuBar, FWidget):
         from .admin import AdminViewWidget
 
         self.change_main_context(AdminViewWidget)
-
-    # G. license
-    def goto_license(self):
-        self.open_dialog(LicenseViewWidget, modal=True)
 
     
     def refresh_widgets_recursively(self, widget):

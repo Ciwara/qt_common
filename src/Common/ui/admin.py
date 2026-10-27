@@ -868,8 +868,10 @@ class SettingsTableWidget(FWidget):
         except Exception as e:
             logger.error(f"Erreur lors du chargement des paramètres: {e}")
             # Créer un objet mock avec des valeurs par défaut
+            from Common.cstatic import BASE_URL
+
             self.settings = type('MockSettings', (), {
-                'url': 'http://file-repo.ml',
+                'url': BASE_URL,
                 'theme': "system",
                 'auth_required': True,
                 'after_cam': 1,
@@ -882,7 +884,11 @@ class SettingsTableWidget(FWidget):
         self.parent = parent
         vbox = QVBoxLayout()
         # self.slug_field =
-        self.url_field = LineEdit(str(self.settings.url or "http://file-repo.ml"))
+        try:
+            from Common.cstatic import BASE_URL as _default_server_url
+        except Exception:
+            _default_server_url = "http://176.58.116.12:9001"
+        self.url_field = LineEdit(str(self.settings.url or _default_server_url))
         
         # Thèmes désactivés - pas de sélection disponible
         self.list_theme = {}

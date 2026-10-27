@@ -43,13 +43,54 @@ def internet_on():
         logger.debug(exc)
 
 
+def default_server_base_url():
+    """URL serveur par défaut (qt_common), partagée par toutes les apps DesktopApp.
+
+    DEBUG=True → LOCAL_DEV_URL (http://127.0.0.1:8001), sinon BASE_URL prod.
+    """
+    try:
+        from Common.cstatic import BASE_URL, CConstants, DEBUG, LOCAL_DEV_URL
+
+        if bool(getattr(CConstants, "DEBUG", False) or DEBUG):
+            return str(LOCAL_DEV_URL or "").rstrip("/") or "http://127.0.0.1:8001"
+        return str(BASE_URL or "").rstrip("/") or "http://176.58.116.12:9001"
+    except Exception:
+        return "http://176.58.116.12:9001"
+
+
+def resolve_server_base_url():
+    """Une seule URL : en DEBUG → local ; sinon Settings.url (hors localhost), sinon BASE_URL.
+
+    Sans --debug, une Settings.url laissée à 127.0.0.1 (premier lancement debug)
+    ne doit pas empêcher l'envoi vers le serveur de production.
+    """
+    try:
+        from Common.cstatic import CConstants, DEBUG
+
+        if bool(getattr(CConstants, "DEBUG", False) or DEBUG):
+            return default_server_base_url()
+    except Exception:
+        pass
+    try:
+        from Common.models import Settings
+
+        configured = str(Settings.get(id=1).url or "").rstrip("/")
+        if (
+            configured
+            and not _is_local_server(configured)
+            and "file-repo.ml" not in configured.lower()
+        ):
+            return configured
+    except Exception:
+        pass
+    return default_server_base_url()
+
+
 def _configured_server_url():
     try:
-        return str(get_server_url("")).strip()
+        return resolve_server_base_url()
     except Exception:
-        from Common.cstatic import BASE_URL
-
-        return str(BASE_URL).strip()
+        return default_server_base_url()
 
 
 def _is_local_server(url):
@@ -62,35 +103,19 @@ def access_server():
         logger.info("Not server mode")
         return False
 
-    import sys
-
-    from Common.cstatic import LOCAL_DEV_URL
-
-    candidates = []
     server_url = _configured_server_url()
-    if server_url:
-        candidates.append(server_url.rstrip("/"))
-    allow_local = (not getattr(sys, "frozen", False)) or bool(
-        getattr(CConstants, "DEBUG", False)
-    )
-    if allow_local:
-        local = str(LOCAL_DEV_URL).rstrip("/")
-        if local and local not in candidates:
-            candidates.append(local)
-
-    for candidate in candidates:
-        # Le serveur local de debug n'a pas besoin d'accès à Internet.
-        if not _is_local_server(candidate) and not internet_on():
-            continue
-        try:
-            urlopen(candidate, timeout=1)
-            return True
-        except URLError:
-            continue
-        except Exception as e:
-            logger.debug(e)
-            continue
-    return False
+    if not server_url:
+        return False
+    if not _is_local_server(server_url) and not internet_on():
+        return False
+    try:
+        urlopen(server_url, timeout=1)
+        return True
+    except URLError:
+        return False
+    except Exception as e:
+        logger.debug(e)
+        return False
 
 
 def device_amount(value, dvs=None):
@@ -455,9 +480,40 @@ def get_path(path, filename):
 
 
 def get_server_url(sub_url):
-    from Common.models import Settings
+    """Construit une URL sur la base unique (Settings.url ou BASE_URL qt_common)."""
+    base = resolve_server_base_url()
+    path = str(sub_url or "").lstrip("/")
+    if not path:
+        return base
+    return "{}/{}".format(base, path)
 
-    return "{}/{}".format(Settings.get(id=1).url, sub_url)
+
+def product_page_url():
+    """Page produit sur le site, ex. http://host/app/GGarage/."""
+    base = resolve_server_base_url().rstrip("/")
+    try:
+        from Common.cstatic import CConstants
+
+        slug = str(getattr(CConstants, "APP_NAME", "") or "").strip()
+    except Exception:
+        slug = ""
+    if slug:
+        return "{}/app/{}/".format(base, slug)
+    return "{}/".format(base)
+
+
+def license_management_url():
+    """Page offres en ligne, ex. http://host/app/offres/Mpayment/."""
+    base = resolve_server_base_url().rstrip("/")
+    try:
+        from Common.cstatic import CConstants
+
+        slug = str(getattr(CConstants, "APP_NAME", "") or "").strip()
+    except Exception:
+        slug = ""
+    if slug:
+        return "{}/app/offres/{}/".format(base, slug)
+    return "{}/".format(base)
 
 
 def slug_mane_file(file_name):
@@ -1031,45 +1087,58 @@ def _revoke_local_license(machine_code):
     persist_license_record(row)
 
 
-def _license_endpoint_candidates():
-    """URLs à tester pour get_licence : serveur configuré, puis local de développement."""
-    from Common.cstatic import BASE_URL, LOCAL_DEV_URL
-
-    urls = []
-    try:
-        urls.append(str(get_server_url("get_licence")).strip())
-    except Exception:
-        urls.append(str(BASE_URL).rstrip("/") + "/get_licence")
-    local = str(LOCAL_DEV_URL).rstrip("/") + "/get_licence"
-    if local not in urls:
-        urls.append(local)
-    return [url for url in urls if url]
-
-
 def request_online_license():
-    """Au lancement, demande au serveur la licence de cette application sur ce poste."""
+    """Demande la licence en ligne seulement si aucune licence locale valide.
+
+    Si l'orga n'est pas encore syncro, laisse ``inscription_client`` gérer
+    l'évaluation (un seul envoi, pas get_licence + inscription).
+    """
     from urllib.request import Request
+
+    _lcse, status = is_valide_mac()
+    if status == CConstants.OK:
+        logger.info("Licence locale déjà valide — pas d'envoi get_licence")
+        return {
+            "ok": True,
+            "skipped": True,
+            "message": "Licence locale déjà valide.",
+        }
+
+    try:
+        from Common.models import Organization
+
+        orga = Organization.get(id=1)
+        if not orga.is_syncro:
+            logger.info(
+                "Pas encore inscrit — get_licence omis (inscription_client unique)"
+            )
+            return {
+                "ok": False,
+                "deferred": True,
+                "message": "Inscription à faire avant get_licence.",
+            }
+    except Exception:
+        pass
 
     machine = str(make_lcse())
     app_slug = _application_name()
     payload = json.dumps({"app": app_slug, "machine_key": machine}).encode("utf-8")
+    url = get_server_url("get_licence")
     body = None
     last_error = None
-    for url in _license_endpoint_candidates():
-        request = Request(
-            url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urlopen(request, timeout=5) as response:
-                body = json.loads(response.read().decode("utf-8"))
-            logger.info("Licence demandée à %s", url)
-            break
-        except Exception as exc:
-            last_error = exc
-            logger.info("Licence injoignable sur %s : %s", url, exc)
+    request = Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        logger.info("Licence demandée à %s", url)
+    except Exception as exc:
+        last_error = exc
+        logger.info("Licence injoignable sur %s : %s", url, exc)
 
     if body is None:
         logger.info("Licence en ligne indisponible : %s", last_error)
